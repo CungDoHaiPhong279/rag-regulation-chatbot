@@ -1,0 +1,15 @@
+# Python & Env
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+
+# Qdrant local storage & Cache model
+qdrant_storage/
+models_cache/
+*.bin
+
+# IDE
+.vscode/
+.idea/
