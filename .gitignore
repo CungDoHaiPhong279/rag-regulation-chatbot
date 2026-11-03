@@ -4,11 +4,16 @@ venv/
 __pycache__/
 *.pyc
 .env
+.pytest_cache/
 
 # Qdrant local storage & Cache model
 qdrant_storage/
+qdrant_local/
 models_cache/
 *.bin
+
+# Data PDFs (keep .gitkeep)
+data/pdfs/*.pdf
 
 # IDE
 .vscode/

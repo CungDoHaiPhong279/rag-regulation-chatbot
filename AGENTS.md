@@ -35,14 +35,23 @@
 - **Môi trường Windows + venv:** luôn dùng `.venv\Scripts\python` và `.venv\Scripts\python -m pip`. Không dùng `pip` trần (máy có `python` 3.12 nhưng `pip` thuộc 3.11).
 - **Tiêu chí "xong":** mỗi task phải nêu rõ cách kiểm tra (lệnh chạy, kết quả mong đợi). Task chưa có test hoặc chưa chạy được thì chưa tính là xong.
 
-## 4. Quy trình [TEAM] (chỉ khi người dùng gõ `[TEAM]`)
+## 4. Quy trình [TEAM] (mô hình Planner / Builder / Critic)
 
-Quy trình này **không tự kích hoạt** khi làm việc theo Tuần. Chỉ dùng khi người dùng gõ `[TEAM]`, hoặc khi người dùng yêu cầu review riêng một task (ví dụ chunker, indexer).
+Quy trình này **không tự kích hoạt** khi làm việc theo Tuần. Chỉ dùng khi người dùng gõ `[TEAM]`, hoặc khi kế hoạch của task ghi rõ có Critic review (hiện tại: chunker và indexer của Tuần 1).
 
-1. **Planner:** chia nhỏ task, chọn chiến lược chunking, định nghĩa schema dữ liệu (xem mục 5).
-2. **Builder:** viết code hoàn chỉnh vào đúng các file trong `src/`, xử lý lỗi đầy đủ, kèm test.
-3. **Critic:** review theo checklist dưới đây, trả về `APPROVED` hoặc `REJECTED`.
-   - `REJECTED` bắt buộc nêu lý do cụ thể và file/dòng liên quan.
+Ý tưởng (theo bài harness design của Anthropic): tách người **làm** và người **chấm**, vì agent hay khen sản phẩm do chính nó viết. Critic phải là một bên độc lập và khắt khe.
+
+1. **Planner:** chia nhỏ task, chọn chiến lược chunking, định nghĩa schema dữ liệu (xem mục 5). Chỉ nêu *cái gì cần đạt*, không áp đặt chi tiết cài đặt không cần thiết.
+2. **Hợp đồng nghiệm thu (TRƯỚC khi viết code):**
+   - Builder đề xuất checklist "xong là gì" cho task (hành vi mong đợi + lệnh kiểm tra).
+   - Critic bổ sung chỗ thiếu (ca biên, lỗi hay gặp). Lặp tối đa **2 vòng** rồi chốt.
+   - Ghi vào `docs/contracts/<tên-task>.md`. Builder chỉ được báo "xong" khi mọi mục trong hợp đồng đạt.
+3. **Builder:** viết code hoàn chỉnh vào đúng các file trong `src/`, xử lý lỗi đầy đủ, kèm test.
+4. **Critic:** đánh giá độc lập theo hợp đồng và checklist dưới đây, trả về `APPROVED` hoặc `REJECTED`.
+   - Mặc định **nghi ngờ**; không khen chung chung.
+   - Bắt buộc **chạy thật**: `pytest` và các lệnh CLI liên quan (chunker, indexer) trên PDF mẫu, rồi dán kết quả thật vào báo cáo. Không được chỉ đọc code rồi nhận xét.
+   - `APPROVED` phải kèm bằng chứng cho từng mục của hợp đồng (lệnh đã chạy, kết quả).
+   - `REJECTED` bắt buộc nêu lý do cụ thể, file/dòng liên quan và cách tái hiện lỗi.
    - Tối đa **3 vòng** sửa. Quá 3 vòng thì dừng lại và báo người dùng quyết định.
 
 **Checklist của Critic:**
@@ -54,10 +63,14 @@ Quy trình này **không tự kích hoạt** khi làm việc theo Tuần. Chỉ 
 - [ ] Lỗi hay gặp (Qdrant chưa bật, PDF scan không có lớp chữ, file hỏng) có thông báo dễ hiểu không?
 - [ ] Có test cho phần vừa viết, gồm test "không mất `page_number`"?
 
-**Chọn model cho từng vai** (Antigravity hiện chỉ có 2 lựa chọn; file này chỉ là hướng dẫn, nhiều khả năng cần chọn model trong giao diện):
-- Planner: `Gemini 4 Argon (medium)`
-- Builder: `Gemini 3.8 Flash (high)`
-- Critic: `Gemini 4 Argon (medium)` (khác model với Builder để bắt được lỗi mà Builder không tự thấy)`
+**Chọn model cho từng vai** (công cụ `invoke_subagent` của Antigravity chỉ nhận tham số `Model` là `inherit` / `flash_lite` / `flash` / `pro`; tên model cụ thể chỉ đổi được trên giao diện chính):
+- Agent chính (Planner / Builder): dùng model người dùng chọn trên giao diện (hoặc subagent `Model='flash'` / `inherit`).
+- Subagent Critic: bắt buộc gọi qua `invoke_subagent` trong ngữ cảnh hội thoại độc lập với `Model='pro'` (hoặc `inherit` khi giao diện đang ở model khác với Builder), tự chạy `pytest` + CLI và thử phá code có chủ đích (mutation testing) để kiểm chứng test thực sự bắt được lỗi rồi hoàn tác.
+**Quy tắc giao việc cho Critic:**
+- Agent chính chỉ đưa cho Critic đường dẫn hợp đồng và mã nguồn. Không chỉ định phép phá,
+  không nói trước kết quả mong đợi, không nêu số test.
+- Critic tự chọn phép thử phá code và đầu vào xấu, làm việc trên bản sao, không sửa file thật.
+- Báo cáo của Critic phải được dán nguyên văn cho người dùng.
 
 ## 5. Quy ước kỹ thuật
 
