@@ -122,6 +122,16 @@ Critic yêu cầu bổ sung các ca biên nguy hiểm và ràng buộc kỹ thu�
    - Giới hạn tối đa 2 dòng và tổng độ dài `<= 250` ký tự.
    - Test: `test_multiline_heading_with_comma_merged` (Điều 16 có dấu phẩy), `test_multiline_heading_without_comma_merged` (không dấu phẩy), `test_multiline_heading_not_merged_when_uppercase` (chữ hoa), `test_multiline_heading_not_merged_when_clause_or_point` (`1.`, `a)`, `đ)`), `test_multiline_heading_not_merged_when_ended_with_period` (kết thúc bằng dấu chấm).
 
+### 3.7. Bổ sung sửa đổi Vòng 4 (Nối dòng mềm — Soft-wrap Line Joining & Separators)
+1. **Nối dòng mềm (`join_soft_lines`):**
+   - Chỉ nối khi dòng trước KHÔNG kết thúc bằng dấu ngắt câu (`.`, `;`, `:`, `?`, `!`) VÀ dòng sau KHÔNG mở đầu một mục mới (`1.`, `1)`, `a)`, `đ)`, gạch đầu dòng `-`, tiêu đề Điều, Chương/Mục/Phần, dòng trống).
+   - Dòng sau dấu câu giữ nguyên ngắt dòng (ví dụ danh sách `A: ...;` / `B: ...;`).
+   - Dòng tiêu đề Chương/Mục/Phần không bị nối vào dòng tên chương kế tiếp.
+   - Test: `test_join_soft_lines_basic`, `test_join_soft_lines_preserves_clauses_and_points`, `test_join_soft_lines_preserves_newline_after_punctuation`, `test_join_soft_lines_preserves_list_with_semicolons`, `test_chunk_pages_joins_soft_lines_into_coherent_chunk`.
+2. **Cấu hình Separators mới cho TextSplitter:**
+   - Thay đổi danh sách phân tách thành: `separators=["\n\n", "\n", ". ", "; ", " ", ""]`.
+   - Ưu tiên ngắt tại dấu chấm câu hoặc chấm phẩy trước khi phải ngắt tại khoảng trắng.
+
 ---
 
 ## 4. Bảng kiểm tra nghiệm thu chính thức (Acceptance Checklist)
@@ -144,5 +154,7 @@ Builder chỉ được tuyên bố hoàn thành Task 2 khi toàn bộ các tiêu
 - [x] **Tiêu chí 14 (CLI báo cáo dòng lọc):** CLI in rõ danh sách dòng header/footer lặp bị loại bỏ kèm số trang.
 - [x] **Tiêu chí 15 (Trang không có chữ & SkippedPage):** `chunk_pdf` và `chunk_pages` trả về `(chunks, skipped_pages)`, in cảnh báo `stderr` nêu rõ số trang và loại trang (scan ảnh vs trang trắng).
 - [x] **Tiêu chí 16 (Tiêu đề Điều nhiều dòng):** Nhận diện và gộp tiêu đề kéo dài 2 dòng (như Điều 16 có dấu phẩy ở dòng 1), không gộp nhầm các dòng chữ hoa hay điểm/khoản `1.`, `a)`, `đ)`.
-- [x] **Tiêu chí 17 (Kiểm thử & Review độc lập):** Toàn bộ unit tests PASS 100%; Subagent Critic độc lập kiểm toán thực tế và duyệt `APPROVED`.
+- [x] **Tiêu chí 17 (Nối dòng mềm & Bảo tồn cấu trúc):** `join_soft_lines` nối liền các câu bị ngắt dòng mềm, giữ nguyên ngắt dòng sau dấu câu ngắt và trước các mục liệt kê (`1.`, `a)`, `đ)`).
+- [x] **Tiêu chí 18 (TextSplitter Separators):** Sử dụng `separators=["\n\n", "\n", ". ", "; ", " ", ""]` để tránh cắt cụt câu giữa chừng.
+- [x] **Tiêu chí 19 (Kiểm thử & Review độc lập):** Toàn bộ unit tests PASS 100%; Subagent Critic độc lập kiểm toán thực tế và duyệt `APPROVED`.
 

@@ -15,6 +15,7 @@ from src.ingestion.chunker import (
     normalize_text,
     parse_article_heading,
     parse_multiline_article_heading,
+    join_soft_lines,
     split_by_article,
 )
 
@@ -426,3 +427,79 @@ def test_removed_lines_collector_and_cli_output(sample, capsys):
     out = capsys.readouterr().out
     assert "Danh sách dòng header/footer lặp bị lọc" in out
     assert "TRƯỜNG ĐẠI HỌC MẪU" in out
+
+
+# --- Nối dòng mềm (Soft-wrap lines) ---
+def test_join_soft_lines_basic():
+    text = (
+        "Sinh viên được xem xét chuyển sang học một chương trình, một\n"
+        "ngành đào tạo khác, hoặc một phân hiệu khác của cơ sở\n"
+        "đào tạo khi đáp ứng các điều kiện sau:"
+    )
+    expected = (
+        "Sinh viên được xem xét chuyển sang học một chương trình, một ngành đào tạo khác, "
+        "hoặc một phân hiệu khác của cơ sở đào tạo khi đáp ứng các điều kiện sau:"
+    )
+    assert join_soft_lines(text) == expected
+
+
+def test_join_soft_lines_preserves_clauses_and_points():
+    text = (
+        "Sinh viên vi phạm kỷ luật bị xử lý theo các hình thức\n"
+        "1. Khiển trách đối với sinh viên vi phạm lần đầu.\n"
+        "a) Cảnh cáo đối với trường hợp tái phạm;\n"
+        "đ) Buộc thôi học đối với trường hợp nghiêm trọng."
+    )
+    # Dù dòng 1 không có dấu câu kết thúc, dòng 2 mở đầu bằng '1.' nên không bị gộp
+    # 'a)' và 'đ)' cũng mở đầu điểm nên không bị gộp
+    assert join_soft_lines(text) == text
+
+
+def test_join_soft_lines_preserves_newline_after_punctuation():
+    text = (
+        "Quy chế này quy định chung về đào tạo.\n"
+        "Thời gian học tập được tính theo năm học;\n"
+        "Học phần bao gồm:\n"
+        "Sinh viên có được hoãn thi không?\n"
+        "Không được hoãn quá thời hạn!\n"
+        "Nội dung tiếp theo\n"
+        "của văn bản quy định."
+    )
+    expected = (
+        "Quy chế này quy định chung về đào tạo.\n"
+        "Thời gian học tập được tính theo năm học;\n"
+        "Học phần bao gồm:\n"
+        "Sinh viên có được hoãn thi không?\n"
+        "Không được hoãn quá thời hạn!\n"
+        "Nội dung tiếp theo của văn bản quy định."
+    )
+    assert join_soft_lines(text) == expected
+
+
+def test_join_soft_lines_preserves_list_with_semicolons():
+    text = (
+        "A: thực hành 30 tiết thí nghiệm;\n"
+        "B: lý thuyết 15 tiết trên lớp;\n"
+        "C: tự học 30 giờ ở nhà."
+    )
+    # Danh sách kết thúc bằng dấu chấm phẩy không bị nối
+    assert join_soft_lines(text) == text
+
+
+def test_chunk_pages_joins_soft_lines_into_coherent_chunk():
+    pages = [
+        "Điều 1. Phạm vi áp dụng\n"
+        "Quy chế này quy định về đào tạo đại học chính quy,\n"
+        "bao gồm thời gian học tập và phương thức tổ chức đào tạo.\n"
+        "1. Áp dụng cho sinh viên toàn trường."
+    ]
+    chunks, _ = chunk_pages(pages, "test.pdf", 800, 150)
+    assert len(chunks) == 1
+    # 2 dòng đầu của nội dung được nối thành 1 dòng liền mạch
+    assert (
+        "Quy chế này quy định về đào tạo đại học chính quy, bao gồm thời gian học tập và phương thức tổ chức đào tạo."
+        in chunks[0].text
+    )
+    # Khoản '1.' vẫn ở dòng riêng
+    assert "\n1. Áp dụng cho sinh viên toàn trường." in chunks[0].text
+

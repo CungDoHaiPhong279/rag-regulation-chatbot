@@ -61,10 +61,11 @@ MIN_BODY_SIZE = 100
 MAX_ARTICLE_HEADING_LEN = 250
 TERMINAL_PUNCTUATION = (".", ":", ";", "!", "?")
 
-# Điểm / khoản liệt kê: "1.", "1)", "a)", "a.", "đ)", "đ." v.v.
+# Điểm / khoản liệt kê: "1.", "1)", "a)", "a.", "đ)", "đ.", "-", "–" v.v.
 CLAUSE_OR_POINT_RE = re.compile(
-    r"^(?:\d+[\.:\)]|[a-zA-Zà-ỹđÀ-ỸĐ][\.:\)])(?:\s+|$)"
+    r"^(?:(?:\d+|[a-zA-Zà-ỹđÀ-ỸĐ])[\.:\)]|[-–—•\*\+])(?:\s+|$)"
 )
+SOFT_LINE_END_PUNCTUATION_RE = re.compile(r"[\.:;?!][\"'\)\]]?$")
 
 
 class PdfNoTextError(Exception):
@@ -187,6 +188,63 @@ def parse_multiline_article_heading(
         return f"Điều {number}. {title}", True
 
     return heading, False
+
+
+def is_soft_line_terminal(line: str) -> bool:
+    """Kiểm tra xem dòng có kết thúc bằng dấu ngắt câu (. ; : ? !) hoặc là tiêu đề hay không."""
+    stripped = line.strip()
+    if not stripped:
+        return True
+    if is_section_heading(stripped) or parse_article_heading(stripped) is not None:
+        return True
+    return bool(SOFT_LINE_END_PUNCTUATION_RE.search(stripped))
+
+
+def is_new_item_start(line: str) -> bool:
+    """Kiểm tra dòng có mở đầu một mục mới (1., 1), a), đ), Điều, Chương/Mục/Phần, dòng trống)."""
+    stripped = line.strip()
+    if not stripped:
+        return True
+    if is_clause_or_point_start(stripped):
+        return True
+    if parse_article_heading(stripped) is not None:
+        return True
+    if is_section_heading(stripped):
+        return True
+    return False
+
+
+def join_soft_lines(text: str) -> str:
+    """Nối các dòng mềm (soft-wrap) bị ngắt dòng giữa câu trong văn bản.
+
+    Quy tắc:
+    - Chỉ nối khi dòng trước KHÔNG kết thúc bằng dấu ngắt câu (. ; : ? !)
+      VÀ dòng sau KHÔNG mở đầu một mục mới (1., 1), a), đ), gạch đầu dòng,
+      tiêu đề Điều, tiêu đề Chương/Mục/Phần, hoặc dòng trống).
+    - Giữ nguyên ngắt dòng sau dấu câu (ví dụ danh sách 'A: ...;' / 'B: ...;').
+    """
+    lines = text.split("\n")
+    if not lines:
+        return ""
+
+    result: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            result.append("")
+            continue
+
+        if not result or result[-1] == "":
+            result.append(stripped)
+            continue
+
+        prev = result[-1]
+        if not is_soft_line_terminal(prev) and not is_new_item_start(stripped):
+            result[-1] = f"{prev} {stripped}"
+        else:
+            result.append(stripped)
+
+    return "\n".join(result)
 
 
 def split_by_article(
@@ -415,6 +473,10 @@ def chunk_pages(
             if not body.strip():
                 continue
 
+            cleaned_body = join_soft_lines(body)
+            if not cleaned_body.strip():
+                continue
+
             prefix = f"{article}: " if article else ""
             body_size = resolved_size - len(prefix)
             if body_size < MIN_BODY_SIZE or resolved_overlap >= body_size:
@@ -426,9 +488,9 @@ def chunk_pages(
             splitter = RecursiveCharacterTextSplitter(
                 chunk_size=body_size,
                 chunk_overlap=resolved_overlap,
-                separators=["\n\n", "\n", ". ", " ", ""],
+                separators=["\n\n", "\n", ". ", "; ", " ", ""],
             )
-            for piece in splitter.split_text(body):
+            for piece in splitter.split_text(cleaned_body):
                 piece_clean = piece.strip()
                 if not piece_clean:
                     continue
