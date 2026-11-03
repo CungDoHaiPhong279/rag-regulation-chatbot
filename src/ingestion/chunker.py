@@ -58,10 +58,26 @@ PAGE_NUMBER_RE = re.compile(
 DEFAULT_CHUNK_SIZE = 800
 DEFAULT_CHUNK_OVERLAP = 150
 MIN_BODY_SIZE = 100
+MAX_ARTICLE_HEADING_LEN = 250
+TERMINAL_PUNCTUATION = (".", ":", ";", "!", "?")
+
+# Điểm / khoản liệt kê: "1.", "1)", "a)", "a.", "đ)", "đ." v.v.
+CLAUSE_OR_POINT_RE = re.compile(
+    r"^(?:\d+[\.:\)]|[a-zA-Zà-ỹđÀ-ỸĐ][\.:\)])(?:\s+|$)"
+)
 
 
 class PdfNoTextError(Exception):
     """Ném ra khi file PDF không có lớp văn bản (PDF bản scan ảnh)."""
+
+
+@dataclass(frozen=True)
+class SkippedPage:
+    """Thông tin về một trang không có lớp chữ bị bỏ qua."""
+
+    page_number: int  # 1-based
+    reason: str       # "scan" (có ảnh) | "blank" (trang trắng)
+    has_images: bool
 
 
 @dataclass(frozen=True)
@@ -100,7 +116,7 @@ def parse_article_heading(line: str) -> str | None:
     if not match or "\n" in normalized.strip():
         return None
     number = match.group(1)
-    title = re.sub(r"[ \t]+", " ", match.group(2)).strip()
+    title = re.sub(r"[ \t]+", " ", match.group(2)).strip().rstrip(".:;")
     if title:
         return f"Điều {number}. {title}"
     return f"Điều {number}"
@@ -112,6 +128,65 @@ def is_section_heading(line: str) -> bool:
     if "\n" in normalized.strip():
         return False
     return SECTION_HEADING_RE.match(normalized) is not None
+
+
+def is_clause_or_point_start(text: str) -> bool:
+    """Kiểm tra xem dòng có phải là điểm/khoản liệt kê như '1.', 'a)', 'đ)' hay không."""
+    return CLAUSE_OR_POINT_RE.match(text.strip()) is not None
+
+
+def parse_multiline_article_heading(
+    line: str,
+    next_line: str | None = None,
+) -> tuple[str | None, bool]:
+    """Nhận diện dòng tiêu đề Điều, hỗ trợ gộp dòng kế tiếp (tối đa 2 dòng).
+
+    Quy tắc gộp:
+    - Tiêu đề ở dòng 1 chưa kết thúc bằng dấu chấm, hai chấm, chấm phẩy (chưa kết thúc
+      bằng dấu câu ngắt, kể cả khi kết thúc bằng dấu phẩy ',' hoặc từ nối).
+    - Dòng sau bắt đầu bằng chữ thường (theo chuẩn Unicode Python char.islower(),
+      không phải chữ hoa, và không phải là '1.', 'a)', 'đ)' v.v.).
+    - Tổng độ dài tiêu đề sau khi gộp không vượt quá MAX_ARTICLE_HEADING_LEN (250 ký tự).
+
+    Trả về (tiêu_đề_chuẩn_hóa, đã_gộp_dòng_sau).
+    """
+    heading = parse_article_heading(line)
+    if heading is None:
+        return None, False
+
+    if next_line is None:
+        return heading, False
+
+    clean_next = next_line.strip()
+    if not clean_next:
+        return heading, False
+
+    clean_line = line.strip()
+    # Nếu tiêu đề dòng 1 đã kết thúc bằng dấu câu ngắt (. : ; ! ?) thì không gộp
+    if clean_line.endswith(TERMINAL_PUNCTUATION):
+        return heading, False
+
+    # Dòng sau bắt buộc bắt đầu bằng ký tự thường
+    first_char = clean_next[0]
+    if not first_char.islower():
+        return heading, False
+
+    # Không gộp nếu dòng sau là điểm/khoản liệt kê (vd: 'a)', 'đ)', '1.')
+    if is_clause_or_point_start(clean_next):
+        return heading, False
+
+    combined_title = f"{clean_line} {clean_next}"
+    if len(combined_title) > MAX_ARTICLE_HEADING_LEN:
+        return heading, False
+
+    match = ARTICLE_HEADING_RE.match(combined_title)
+    if match:
+        number = match.group(1)
+        title = re.sub(r"[ \t]+", " ", match.group(2)).strip()
+        title = title.rstrip(",")
+        return f"Điều {number}. {title}", True
+
+    return heading, False
 
 
 def split_by_article(
@@ -141,18 +216,37 @@ def split_by_article(
             segments.append((current_article, body))
         current_lines.clear()
 
-    for raw_line in normalized_page.split("\n"):
+    raw_lines = normalized_page.split("\n")
+    i = 0
+    while i < len(raw_lines):
+        raw_line = raw_lines[i]
         line = raw_line.strip()
         if not line:
             if current_lines and current_lines[-1] != "":
                 current_lines.append("")
+            i += 1
             continue
 
-        article_heading = parse_article_heading(line)
+        # Tìm dòng không rỗng kế tiếp để kiểm tra gộp tiêu đề nhiều dòng
+        next_non_empty = None
+        next_idx = None
+        for j in range(i + 1, len(raw_lines)):
+            if raw_lines[j].strip():
+                next_non_empty = raw_lines[j].strip()
+                next_idx = j
+                break
+
+        article_heading, was_consumed = parse_multiline_article_heading(
+            line, next_non_empty
+        )
         if article_heading is not None:
             _flush()
             current_article = article_heading
             last_seen_article = article_heading
+            if was_consumed and next_idx is not None:
+                i = next_idx + 1
+            else:
+                i += 1
             continue
 
         if is_section_heading(line):
@@ -161,9 +255,11 @@ def split_by_article(
                 current_article = None
             last_seen_article = None
             current_lines.append(line)
+            i += 1
             continue
 
         current_lines.append(line)
+        i += 1
 
     _flush()
     return segments, last_seen_article
@@ -260,8 +356,14 @@ def chunk_pages(
     chunk_size: int | None = None,
     chunk_overlap: int | None = None,
     removed_lines_collector: list[RemovedLine] | None = None,
-) -> list[Chunk]:
-    """Làm sạch, tách Điều và cắt chunk từ danh sách văn bản từng trang của một file."""
+    page_has_images: list[bool] | None = None,
+) -> tuple[list[Chunk], list[SkippedPage]]:
+    """Làm sạch, tách Điều và cắt chunk từ danh sách văn bản từng trang của một file.
+
+    Trả về:
+    - chunks: Danh sách các Chunk được cắt ra kèm đầy đủ metadata.
+    - skipped_pages: Danh sách các trang không có lớp chữ bị bỏ qua.
+    """
     resolved_size, resolved_overlap = _resolve_chunk_params(chunk_size, chunk_overlap)
 
     normalized_pages = [normalize_text(p) for p in page_texts]
@@ -274,7 +376,28 @@ def chunk_pages(
             f"{source_file}: không có lớp chữ (PDF scan?) — cần OCR"
         )
 
-    cleaned_pages_lines, removed_lines = _remove_repeated_headers_footers(pages_non_empty_lines)
+    # Ghi nhận và cảnh báo các trang không có lớp chữ
+    skipped_pages: list[SkippedPage] = []
+    for page_idx, lines in enumerate(pages_non_empty_lines, start=1):
+        if not lines:
+            has_img = (
+                page_has_images[page_idx - 1]
+                if page_has_images and page_idx - 1 < len(page_has_images)
+                else False
+            )
+            reason = "scan" if has_img else "blank"
+            skipped_pages.append(
+                SkippedPage(page_number=page_idx, reason=reason, has_images=has_img)
+            )
+            desc = "trang scan ảnh" if reason == "scan" else "trang trắng"
+            print(
+                f"Cảnh báo [{source_file} | Trang {page_idx}]: không có lớp chữ ({desc}) — bỏ qua.",
+                file=sys.stderr,
+            )
+
+    cleaned_pages_lines, removed_lines = _remove_repeated_headers_footers(
+        pages_non_empty_lines
+    )
     if removed_lines_collector is not None:
         removed_lines_collector.extend(removed_lines)
 
@@ -325,7 +448,7 @@ def chunk_pages(
                 )
                 chunk_index += 1
 
-    return chunks
+    return chunks, skipped_pages
 
 
 def chunk_pdf(
@@ -333,12 +456,16 @@ def chunk_pdf(
     chunk_size: int | None = None,
     chunk_overlap: int | None = None,
     removed_lines_collector: list[RemovedLine] | None = None,
-) -> list[Chunk]:
-    """Đọc các trang văn bản từ một file PDF rồi chuyển cho chunk_pages xử lý."""
+) -> tuple[list[Chunk], list[SkippedPage]]:
+    """Đọc các trang văn bản và hình ảnh từ một file PDF rồi chuyển cho chunk_pages xử lý."""
     pdf_path = Path(pdf_path)
     doc = fitz.open(pdf_path)
     try:
-        page_texts = [page.get_text("text") for page in doc]
+        page_texts: list[str] = []
+        page_has_images: list[bool] = []
+        for page in doc:
+            page_texts.append(page.get_text("text"))
+            page_has_images.append(len(page.get_images()) > 0)
     finally:
         doc.close()
 
@@ -348,6 +475,7 @@ def chunk_pdf(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         removed_lines_collector=removed_lines_collector,
+        page_has_images=page_has_images,
     )
 
 
@@ -356,6 +484,7 @@ def chunk_directory(
     chunk_size: int | None = None,
     chunk_overlap: int | None = None,
     removed_lines_collector: list[tuple[str, RemovedLine]] | None = None,
+    skipped_pages_collector: list[tuple[str, SkippedPage]] | None = None,
 ) -> tuple[list[Chunk], list[str]]:
     """Đọc mọi file .pdf trong thư mục, bỏ qua file scan và trả về (chunks, skipped_files)."""
     pdf_dir = Path(pdf_dir)
@@ -365,7 +494,7 @@ def chunk_directory(
     for pdf_file in sorted(pdf_dir.glob("*.pdf")):
         try:
             file_removed: list[RemovedLine] = []
-            file_chunks = chunk_pdf(
+            file_chunks, file_skipped_pages = chunk_pdf(
                 pdf_file,
                 chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap,
@@ -375,6 +504,9 @@ def chunk_directory(
             if removed_lines_collector is not None:
                 for item in file_removed:
                     removed_lines_collector.append((pdf_file.name, item))
+            if skipped_pages_collector is not None:
+                for sp in file_skipped_pages:
+                    skipped_pages_collector.append((pdf_file.name, sp))
         except PdfNoTextError:
             skipped_files.append(pdf_file.name)
             print(
@@ -408,10 +540,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     all_removed: list[tuple[str, RemovedLine]] = []
+    all_skipped_pages: list[tuple[str, SkippedPage]] = []
     if target.is_file():
         try:
             file_removed: list[RemovedLine] = []
-            chunks = chunk_pdf(
+            chunks, skipped_pages = chunk_pdf(
                 target,
                 args.chunk_size,
                 args.chunk_overlap,
@@ -420,6 +553,8 @@ def main(argv: list[str] | None = None) -> int:
             skipped: list[str] = []
             for item in file_removed:
                 all_removed.append((target.name, item))
+            for sp in skipped_pages:
+                all_skipped_pages.append((target.name, sp))
         except PdfNoTextError as exc:
             print(f"Bỏ qua {exc}", file=sys.stderr)
             return 1
@@ -429,6 +564,7 @@ def main(argv: list[str] | None = None) -> int:
             args.chunk_size,
             args.chunk_overlap,
             removed_lines_collector=all_removed,
+            skipped_pages_collector=all_skipped_pages,
         )
 
     articles = list(dict.fromkeys(c.article for c in chunks if c.article is not None))
@@ -439,6 +575,12 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Số Điều nhận diện được: {len(articles)} -> {articles}")
     if skipped:
         print(f"File bị bỏ qua (scan) : {skipped}")
+
+    if all_skipped_pages:
+        print(f"\nDanh sách trang không có lớp chữ bị bỏ qua ({len(all_skipped_pages)} trang):")
+        for filename, sp in all_skipped_pages:
+            desc = "scan ảnh" if sp.reason == "scan" else "trang trắng"
+            print(f"  - [{filename} | Trang {sp.page_number}]: {desc}")
 
     if all_removed:
         print(f"\nDanh sách dòng header/footer lặp bị lọc ({len(all_removed)} dòng):")
@@ -461,4 +603,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

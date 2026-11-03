@@ -109,7 +109,22 @@ Critic yêu cầu bổ sung các ca biên nguy hiểm và ràng buộc kỹ thu�
 3. **Hiển thị dòng bị lọc trên CLI:**
    - CLI `main()` in ra danh sách đầy đủ các dòng header/footer lặp đã bị loại bỏ kèm số trang và vị trí (header/footer) (`test_removed_lines_collector_and_cli_output`).
 
-## 4. Bảng kiểm tra nghiệm thu chính thức (Acceptance Checklist Vòng 2)
+### 3.6. Bổ sung sửa đổi Vòng 3 (Gia cố theo thực nghiệm PDF thật 22 trang Thông tư 08/2021)
+1. **Xử lý trang không có chữ (`SkippedPage`):**
+   - Định nghĩa dataclass `SkippedPage(page_number: int, reason: str, has_images: bool)`.
+   - `chunk_pdf` và `chunk_pages` trả về `tuple[list[Chunk], list[SkippedPage]]`.
+   - Nếu một trang không có lớp văn bản: in cảnh báo chi tiết ra `sys.stderr` nêu rõ số trang và phân loại (`"trang scan ảnh"` nếu `has_images=True` hoặc `"trang trắng"` nếu `has_images=False`), thu thập vào `skipped_pages`.
+   - Nếu toàn bộ file không có trang nào có chữ: ném `PdfNoTextError` như cũ.
+   - Test: `test_skipped_pages_returned_and_warned_on_stderr`.
+2. **Tiêu đề Điều nhiều dòng (`parse_multiline_article_heading`):**
+   - Tự động gộp dòng kế tiếp khi tiêu đề dòng 1 chưa kết thúc bằng dấu câu ngắt (`.`, `:`, `;`, `!`, `?`) VÀ dòng kế tiếp bắt đầu bằng chữ thường (theo chuẩn Unicode Python `char.islower()`, không phải chữ hoa, và không phải các điểm/khoản liệt kê như `1.`, `a)`, `đ)`).
+   - Chuẩn hóa tiêu đề: loại bỏ dấu phẩy hoặc dấu chấm ngắt ở đuôi.
+   - Giới hạn tối đa 2 dòng và tổng độ dài `<= 250` ký tự.
+   - Test: `test_multiline_heading_with_comma_merged` (Điều 16 có dấu phẩy), `test_multiline_heading_without_comma_merged` (không dấu phẩy), `test_multiline_heading_not_merged_when_uppercase` (chữ hoa), `test_multiline_heading_not_merged_when_clause_or_point` (`1.`, `a)`, `đ)`), `test_multiline_heading_not_merged_when_ended_with_period` (kết thúc bằng dấu chấm).
+
+---
+
+## 4. Bảng kiểm tra nghiệm thu chính thức (Acceptance Checklist)
 
 Builder chỉ được tuyên bố hoàn thành Task 2 khi toàn bộ các tiêu chí dưới đây đạt:
 
@@ -118,15 +133,16 @@ Builder chỉ được tuyên bố hoàn thành Task 2 khi toàn bộ các tiêu
 - [x] **Tiêu chí 3 (Tách Điều & Tiền tố):** Không chunk nào chứa 2 Điều. Mọi chunk thuộc Điều đều có tiền tố `"<article>: "`. Điều kéo dài sang trang sau vẫn mang đúng nhãn `article` và tiền tố.
 - [x] **Tiêu chí 4 (Tôn trọng `chunk_size`):** `len(chunk.text) <= chunk_size` (tính cả tiền tố) trên toàn bộ các mức cấu hình (400, 800, 1200 ký tự).
 - [x] **Tiêu chí 5 (Làm sạch & Chuẩn hóa):** Văn bản đầu ra là Unicode NFC; header/footer lặp của PDF bị loại bỏ mà không xóa nhầm nội dung điều khoản.
-- [x] **Tiêu chí 6 (Xử lý PDF Scan):** Ném lỗi `PdfNoTextError` và CLI bỏ qua file scan an toàn.
+- [x] **Tiêu chí 6 (Xử lý PDF Scan):** Ném lỗi `PdfNoTextError` khi toàn bộ file là scan; in cảnh báo và thu thập `SkippedPage` khi có trang scan lẻ tẻ.
 - [x] **Tiêu chí 7 (UTF-8 dùng chung):** CLI in tiếng Việt mượt mà qua `src/utils.py`, không lỗi font trên console Windows.
-- [x] **Tiêu chí 9 (ID cố định):** `chunk_pdf` chạy 2 lần cho cùng danh sách `chunk_id`.
-- [x] **Tiêu chí 10 (Regex biên):** câu tham chiếu "Điều 5 của…" không bị nhận; "Điều 5." không tên không làm hỏng chunk.
-- [x] **Tiêu chí 11 (Phần mở đầu & Chương/Mục/Phần):** văn bản trước Điều đầu tiên và các dòng tiêu đề `Chương`/`Mục`/`Phần` (kể cả tên chương ở dòng kế tiếp) có `article=None`, không tiền tố.
-- [x] **Tiêu chí 12 (Báo lỗi rõ):** thông báo bỏ qua PDF scan nêu đúng tên file.
-- [x] **Tiêu chí 13 (Kiểm thử đột biến):** Critic thử phá `page_number` và lọc header/footer -> test chuyển đỏ, hoàn tác -> test xanh.
-- [x] **Tiêu chí 14 (Tiêu đề cuối trang):** Tiêu đề Điều nằm ở cuối trang trước được bảo lưu nguyên vẹn sang trang sau, không bị mất và không bị gán nhầm vào Điều trước.
-- [x] **Tiêu chí 15 (Không nuốt nhầm câu văn):** Bộ lọc footer bảo toàn các câu văn có chứa số (như `"Nội dung Điều 4."`).
-- [x] **Tiêu chí 16 (CLI báo cáo dòng lọc):** CLI in rõ danh sách dòng header/footer lặp bị loại bỏ kèm số trang.
-- [x] **Tiêu chí 8 (Kiểm thử & Review Vòng 2):** Toàn bộ unit tests PASS 100%; Subagent Critic độc lập Vòng 2 chạy thực tế và duyệt `APPROVED`.
+- [x] **Tiêu chí 8 (ID cố định):** `chunk_pdf` chạy 2 lần cho cùng danh sách `chunk_id`.
+- [x] **Tiêu chí 9 (Regex biên):** câu tham chiếu "Điều 5 của…" không bị nhận; "Điều 5." không tên không làm hỏng chunk.
+- [x] **Tiêu chí 10 (Phần mở đầu & Chương/Mục/Phần):** văn bản trước Điều đầu tiên và các dòng tiêu đề `Chương`/`Mục`/`Phần` (kể cả tên chương ở dòng kế tiếp) có `article=None`, không tiền tố.
+- [x] **Tiêu chí 11 (Báo lỗi rõ):** thông báo bỏ qua PDF scan nêu đúng tên file.
+- [x] **Tiêu chí 12 (Tiêu đề cuối trang):** Tiêu đề Điều nằm ở cuối trang trước được bảo lưu nguyên vẹn sang trang sau, không bị mất và không bị gán nhầm vào Điều trước.
+- [x] **Tiêu chí 13 (Không nuốt nhầm câu văn):** Bộ lọc footer bảo toàn các câu văn có chứa số (như `"Nội dung Điều 4."`).
+- [x] **Tiêu chí 14 (CLI báo cáo dòng lọc):** CLI in rõ danh sách dòng header/footer lặp bị loại bỏ kèm số trang.
+- [x] **Tiêu chí 15 (Trang không có chữ & SkippedPage):** `chunk_pdf` và `chunk_pages` trả về `(chunks, skipped_pages)`, in cảnh báo `stderr` nêu rõ số trang và loại trang (scan ảnh vs trang trắng).
+- [x] **Tiêu chí 16 (Tiêu đề Điều nhiều dòng):** Nhận diện và gộp tiêu đề kéo dài 2 dòng (như Điều 16 có dấu phẩy ở dòng 1), không gộp nhầm các dòng chữ hoa hay điểm/khoản `1.`, `a)`, `đ)`.
+- [x] **Tiêu chí 17 (Kiểm thử & Review độc lập):** Toàn bộ unit tests PASS 100%; Subagent Critic độc lập kiểm toán thực tế và duyệt `APPROVED`.
 
