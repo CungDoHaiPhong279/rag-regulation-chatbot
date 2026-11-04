@@ -214,7 +214,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--collection", default=None, help="Tên collection (mặc định QDRANT_COLLECTION).")
     args = parser.parse_args(argv)
 
-    settings = load_settings()
+    try:
+        settings = load_settings()
+    except ValueError as exc:
+        print(f"Lỗi cấu hình (.env / biến môi trường): {exc}", file=sys.stderr)
+        return 1
     if args.local:
         settings = dataclasses.replace(settings, qdrant_path=LOCAL_QDRANT_PATH)
     collection = args.collection or settings.collection
@@ -226,7 +230,9 @@ def main(argv: list[str] | None = None) -> int:
         client = get_client(settings)
         check_connection(client, where)
     except Exception as exc:
-        detail = f" ({exc})" if not isinstance(exc, QdrantUnavailableError) else ""
+        # Nêu nguyên nhân thật (vd. 403 sai API key, thư mục local bị khóa), không chỉ đoán "chưa bật Docker"
+        cause = exc.__cause__ if isinstance(exc, QdrantUnavailableError) else exc
+        detail = f" (nguyên nhân: {cause})" if cause else ""
         print(
             f'Không kết nối được Qdrant tại {where}{detail}. Chạy "docker compose up -d" hoặc thêm --local '
             "(hoặc đặt QDRANT_PATH trong .env) để dùng Qdrant local mode. Nếu dùng local mode, hãy tắt "
@@ -259,7 +265,15 @@ def _index_with_client(args: argparse.Namespace, settings: Settings, client: Qdr
         )
         return 1
 
-    embedder = BgeM3Embedder(settings.embedding_model)
+    try:
+        embedder = BgeM3Embedder(settings.embedding_model)
+    except Exception as exc:
+        print(
+            f"Không tải được model embedding '{settings.embedding_model}': {exc}. "
+            "Kiểm tra EMBEDDING_MODEL và kết nối mạng (lần đầu cần tải model).",
+            file=sys.stderr,
+        )
+        return 1
     try:
         ensure_collection(client, collection, embedder.dense_dim, recreate=args.recreate)
     except CollectionSchemaError as exc:

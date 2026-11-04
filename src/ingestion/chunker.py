@@ -572,6 +572,15 @@ def chunk_directory(
                 chunk_overlap=chunk_overlap,
                 removed_lines_collector=file_removed,
             )
+            if not file_chunks:
+                # Có lớp chữ nhưng mọi dòng bị lọc (vd. chỉ có header/footer): báo bỏ qua để indexer
+                # giữ dữ liệu cũ của file thay vì coi là file đã biến mất và xóa sạch.
+                skipped_files.append(pdf_file.name)
+                print(
+                    f"Bỏ qua {pdf_file.name}: không còn nội dung sau khi làm sạch (chỉ có header/footer?)",
+                    file=sys.stderr,
+                )
+                continue
             all_chunks.extend(file_chunks)
             if removed_lines_collector is not None:
                 for item in file_removed:
@@ -615,6 +624,12 @@ def main(argv: list[str] | None = None) -> int:
     target: Path = args.target
     if not target.exists():
         print(f"Không tìm thấy đường dẫn: {target}", file=sys.stderr)
+        return 1
+
+    try:
+        args.chunk_size, args.chunk_overlap = _resolve_chunk_params(args.chunk_size, args.chunk_overlap)
+    except ValueError as exc:
+        print(f"Lỗi cấu hình: {exc}", file=sys.stderr)
         return 1
 
     all_removed: list[tuple[str, RemovedLine]] = []
