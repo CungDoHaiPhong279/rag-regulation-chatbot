@@ -72,7 +72,7 @@ Critic yêu cầu bổ sung các ca biên nguy hiểm và ràng buộc kỹ thu�
   - Critic sẽ chạy trực tiếp lệnh:
     ```powershell
     .venv\Scripts\python -m pytest tests/ingestion/test_chunker.py -v
-    .venv\Scripts\python -m src.ingestion.chunker data/pdfs/quy_che_mau.pdf
+    .venv\Scripts\python -m src.ingestion.chunker data/samples/quy_che_mau.pdf
     ```
   - Báo cáo của Critic bắt buộc phải dán output thực tế của 2 lệnh trên và kiểm tra trực tiếp 3 chunk mẫu in ra. Nếu thiếu bằng chứng chạy thật -> **REJECTED ngay lập tức**.
 
