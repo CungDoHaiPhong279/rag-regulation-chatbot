@@ -164,21 +164,21 @@ Bộ test của Builder bắt buộc phải có đủ 14 test cases sau:
 
 Builder chỉ được tuyên bố hoàn thành Task 4 khi toàn bộ các tiêu chí dưới đây đạt:
 
-- [ ] **Tiêu chí 1 (Named Vectors đầy đủ):** Collection Qdrant được tạo với cả 2 named vectors: `dense` (kích thước theo embedder, cosine) và `sparse` (SparseVectorParams), sẵn sàng cho Hybrid Search Tuần 3.
-- [ ] **Tiêu chí 2 (Payload Index):** Tự động tạo payload index kiểu `keyword` cho trường `source_file` để tối ưu truy vấn lọc và dọn dẹp.
-- [ ] **Tiêu chí 3 (Payload Schema toàn vẹn):** Mọi point chứa đúng 5 trường metadata: `source_file` (str), `page_number` (int), `article` (str | None), `chunk_index` (int), `text` (str).
-- [ ] **Tiêu chí 4 (Thứ tự Upsert trước -> Xóa thừa sau):** Embed toàn bộ chunk của file trước; sau đó upsert chunk mới theo lô (`wait=True`). Nếu có lỗi ở bước embed hoặc upsert thì dừng ngay, giữ nguyên dữ liệu cũ, tuyệt đối không gọi xóa stale points.
-- [ ] **Tiêu chí 5 (Dọn dẹp Stale Points có Scroll phân trang an toàn):** Khi file bị rút ngắn (ví dụ 5 trang thành 3 trang), dọn dẹp toàn bộ point mồ côi bằng scroll có phân trang (vòng lặp `offset` cho đến hết), đặt `with_payload=False` và `with_vectors=False`, filter chính xác theo `source_file`, không xóa nhầm point của file khác.
-- [ ] **Tiêu chí 6 (Chống nhân bản dữ liệu):** Point ID là UUIDv5 từ `Chunk.chunk_id`; chạy index lại nhiều lần trên cùng dữ liệu không làm tăng số lượng point.
-- [ ] **Tiêu chí 7 (File rỗng / không chunk):** File không có chunk nào thì bỏ qua, in cảnh báo, không xóa dữ liệu cũ đã có của file đó trong collection.
-- [ ] **Tiêu chí 8 (Kiểm tra lệch số chiều vector & Cấu trúc Named Vectors):** Phát hiện collection cũ không có named vector hoặc lệch kích thước `dense`: báo lỗi rõ ràng nêu số chiều hiện tại vs mới, kèm hướng dẫn `--recreate`.
-- [ ] **Tiêu chí 9 (Xử lý theo lô):** Cả bước embed và upsert đều hỗ trợ xử lý theo lô (`embed_batch_size`, `upsert_batch_size`), mọi lệnh upsert/delete đều dùng `wait=True`.
-- [ ] **Tiêu chí 10 (Fast-Fail khi Qdrant sập):** Khi Qdrant không bật, CLI kiểm tra kết nối ngay đầu hàm `main()` qua `client.get_collections()`, báo lỗi rõ ràng hướng dẫn `docker compose up -d` hoặc `--local`, thoát mã `1`, và **chứng minh `BgeM3Embedder` không hề được khởi tạo**.
-- [ ] **Tiêu chí 11 (Truy vấn trả đúng số trang):** Thực hiện `query_points` bằng vector dense trả về đúng `page_number`, `source_file` và `article`.
-- [ ] **Tiêu chí 12 (Hỗ trợ Local Mode):** Cho phép chạy Qdrant local mode qua đường dẫn thư mục (`qdrant_path` hoặc `--local`), dữ liệu được ghi bền vững xuống đĩa.
-- [ ] **Tiêu chí 13 (Báo cáo tổng kết toàn diện):** CLI in đầy đủ số file, số chunk, danh sách file scan bị bỏ qua và danh sách trang không có lớp chữ bị bỏ qua (`SkippedPage`).
-- [ ] **Tiêu chí 14 (Tải lười & Zero-Torch Test):** `SentenceTransformer` được tải lười bên trong `BgeM3Embedder.__init__`; 100% unit tests chạy với `FakeEmbedder` và Qdrant in-memory (`:memory:`), thời gian chạy < 5 giây, không import `torch` ở top-level.
-- [ ] **Tiêu chí 15 (Bao phủ kiểm thử & Mutation Testing):** Đạt tối thiểu 14 test cases trong `tests/ingestion/test_indexer.py`; Critic thực hiện kiểm thử đột biến thành công trên bản sao và duyệt `APPROVED`.
+- [x] **Tiêu chí 1 (Named Vectors đầy đủ):** Collection Qdrant được tạo với cả 2 named vectors: `dense` (kích thước theo embedder, cosine) và `sparse` (SparseVectorParams), sẵn sàng cho Hybrid Search Tuần 3.
+- [x] **Tiêu chí 2 (Payload Index):** Tự động tạo payload index kiểu `keyword` cho trường `source_file` để tối ưu truy vấn lọc và dọn dẹp.
+- [x] **Tiêu chí 3 (Payload Schema toàn vẹn):** Mọi point chứa đúng 5 trường metadata: `source_file` (str), `page_number` (int), `article` (str | None), `chunk_index` (int), `text` (str).
+- [x] **Tiêu chí 4 (Thứ tự Upsert trước -> Xóa thừa sau):** Embed toàn bộ chunk của file trước; sau đó upsert chunk mới theo lô (`wait=True`). Nếu có lỗi ở bước embed hoặc upsert thì dừng ngay, giữ nguyên dữ liệu cũ, tuyệt đối không gọi xóa stale points.
+- [x] **Tiêu chí 5 (Dọn dẹp Stale Points có Scroll phân trang an toàn):** Khi file bị rút ngắn (ví dụ 5 trang thành 3 trang), dọn dẹp toàn bộ point mồ côi bằng scroll có phân trang (vòng lặp `offset` cho đến hết), đặt `with_payload=False` và `with_vectors=False`, filter chính xác theo `source_file`, không xóa nhầm point của file khác.
+- [x] **Tiêu chí 6 (Chống nhân bản dữ liệu):** Point ID là UUIDv5 từ `Chunk.chunk_id`; chạy index lại nhiều lần trên cùng dữ liệu không làm tăng số lượng point.
+- [x] **Tiêu chí 7 (File rỗng / không chunk):** File không có chunk nào thì bỏ qua, in cảnh báo, không xóa dữ liệu cũ đã có của file đó trong collection.
+- [x] **Tiêu chí 8 (Kiểm tra lệch số chiều vector & Cấu trúc Named Vectors):** Phát hiện collection cũ không có named vector hoặc lệch kích thước `dense`: báo lỗi rõ ràng nêu số chiều hiện tại vs mới, kèm hướng dẫn `--recreate`.
+- [x] **Tiêu chí 9 (Xử lý theo lô):** Cả bước embed và upsert đều hỗ trợ xử lý theo lô (`embed_batch_size`, `upsert_batch_size`), mọi lệnh upsert/delete đều dùng `wait=True`.
+- [x] **Tiêu chí 10 (Fast-Fail khi Qdrant sập):** Khi Qdrant không bật, CLI kiểm tra kết nối ngay đầu hàm `main()` qua `client.get_collections()`, báo lỗi rõ ràng hướng dẫn `docker compose up -d` hoặc `--local`, thoát mã `1`, và **chứng minh `BgeM3Embedder` không hề được khởi tạo**.
+- [x] **Tiêu chí 11 (Truy vấn trả đúng số trang):** Thực hiện `query_points` bằng vector dense trả về đúng `page_number`, `source_file` và `article`.
+- [x] **Tiêu chí 12 (Hỗ trợ Local Mode):** Cho phép chạy Qdrant local mode qua đường dẫn thư mục (`qdrant_path` hoặc `--local`), dữ liệu được ghi bền vững xuống đĩa.
+- [x] **Tiêu chí 13 (Báo cáo tổng kết toàn diện):** CLI in đầy đủ số file, số chunk, danh sách file scan bị bỏ qua và danh sách trang không có lớp chữ bị bỏ qua (`SkippedPage`).
+- [x] **Tiêu chí 14 (Tải lười & Zero-Torch Test):** `SentenceTransformer` được tải lười bên trong `BgeM3Embedder.__init__`; 100% unit tests chạy với `FakeEmbedder` và Qdrant in-memory (`:memory:`), thời gian chạy < 5 giây, không import `torch` ở top-level.
+- [x] **Tiêu chí 15 (Bao phủ kiểm thử & Mutation Testing):** Đạt tối thiểu 14 test cases trong `tests/ingestion/test_indexer.py`; Critic thực hiện kiểm thử đột biến thành công trên bản sao và duyệt `APPROVED`.
 
 ---
 
@@ -193,3 +193,5 @@ Các mục dưới đây **thay thế** điều khoản tương ứng ở trên 
 5. **Lỗi dùng ngoại lệ riêng:** `QdrantUnavailableError` (kết nối), `CollectionSchemaError` (cấu trúc collection). Báo cáo trả về `IndexReport(upserted, deleted_stale, files)`.
 6. **Thứ tự CLI:** kiểm tra kết nối Qdrant → cắt chunk → tải `BgeM3Embedder` → `ensure_collection` → `index_corpus`. `chunk_size`/`chunk_overlap` lấy từ `Settings` (`src/config.py`). Thêm cờ `--collection` (dùng cho thí nghiệm `chunk_size`).
 7. **Danh sách test** (thay mục 3.5): `test_collection_has_dense_cosine_and_sparse_idf`, `test_payload_exact_schema_and_int_page`, `test_point_has_dense_and_sparse_vectors`, `test_reindex_same_data_no_duplicates`, `test_shrunk_file_stale_points_deleted`, `test_removed_file_points_deleted`, `test_preserved_file_points_kept`, `test_embed_failure_keeps_old_data`, `test_upsert_failure_skips_deletion`, `test_stale_cleanup_paginates`, `test_dimension_mismatch_raises`, `test_unnamed_or_missing_sparse_raises`, `test_recreate_resets_dimension`, `test_empty_chunks_raises_without_touching_data`, `test_local_mode_persists`, `test_cli_qdrant_down_fails_fast`, `test_cli_end_to_end_local`.
+
+> **Nghiệm thu (2026-11-05):** Critic vòng 1 REJECTED (`docs/reviews/task-6-indexer-r1.md`) → đã sửa → kiểm chứng bản sửa APPROVED (`docs/reviews/task-3-6-verify-r3.md`, Sonnet, phạm vi hẹp: chỉ các lỗi đã biết). Tiêu chí "< 5 giây" không đạt nguyên văn (4 file test ~10 s do import pyvi/qdrant/fitz; không tải model, không torch).
