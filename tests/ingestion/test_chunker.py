@@ -649,3 +649,28 @@ def test_chunk_params_follow_config_rules(monkeypatch):
     monkeypatch.setenv("CHUNK_OVERLAP", "abc")
     with pytest.raises(ValueError, match="CHUNK_OVERLAP"):
         chunk_pages(["Điều 1. A\nNội dung."], "x.pdf")
+
+
+# --- Critic đầy đủ vòng 4 (docs/reviews/task-3-6-full-r4.md) ---
+def test_file_with_text_but_zero_chunks_is_skipped(tmp_path, capsys):
+    # Mọi dòng bị lọc như header/footer -> 0 chunk: phải vào skipped_files để indexer GIỮ dữ liệu cũ
+    build_sample_pdf(tmp_path / "ok.pdf")
+    doc = fitz.open()
+    for n in range(1, 4):
+        doc.new_page().insert_text(fitz.Point(72, 72), f"Trang {n}", fontsize=12)
+    doc.save(tmp_path / "only_footer.pdf")
+    doc.close()
+    chunks, skipped = chunk_directory(tmp_path)
+    assert skipped == ["only_footer.pdf"]
+    assert {c.source_file for c in chunks} == {"ok.pdf"}
+    assert "only_footer.pdf" in capsys.readouterr().err
+
+
+def test_cli_invalid_chunk_size_env_is_friendly(monkeypatch, capsys, tmp_path):
+    from src.ingestion.chunker import main
+
+    build_sample_pdf(tmp_path / "ok.pdf")
+    monkeypatch.setenv("CHUNK_SIZE", "abc")
+    assert main([str(tmp_path)]) == 1
+    err = capsys.readouterr().err
+    assert "CHUNK_SIZE" in err and "Traceback" not in err

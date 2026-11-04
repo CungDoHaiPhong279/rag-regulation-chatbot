@@ -365,3 +365,43 @@ def test_cli_local_storage_locked_is_friendly(monkeypatch, capsys, tmp_path):
         holder.close()
     err = capsys.readouterr().err
     assert "Không kết nối được Qdrant" in err and "Traceback" not in err
+
+
+# --- Critic đầy đủ vòng 4 (docs/reviews/task-3-6-full-r4.md) ---
+def test_cli_invalid_config_is_friendly(monkeypatch, capsys, tmp_path):
+    _clean_env(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pdfs").mkdir()
+    monkeypatch.setenv("CHUNK_SIZE", "abc")
+    assert indexer.main(["--pdf-dir", str(tmp_path / "pdfs"), "--local"]) == 1
+    err = capsys.readouterr().err
+    assert "CHUNK_SIZE" in err and "Traceback" not in err
+
+
+def test_cli_model_load_failure_is_friendly(monkeypatch, capsys, tmp_path):
+    from src.ingestion.sample_pdf import build_sample_pdf
+
+    _clean_env(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    build_sample_pdf(tmp_path / "pdfs" / "a.pdf")
+
+    def broken(*a, **k):
+        raise OSError("nonexistent/zzz is not a valid model identifier")
+
+    monkeypatch.setattr(indexer, "BgeM3Embedder", broken)
+    assert indexer.main(["--pdf-dir", str(tmp_path / "pdfs"), "--local"]) == 1
+    err = capsys.readouterr().err
+    assert "Không tải được model embedding" in err and "nonexistent/zzz" in err
+
+
+def test_connection_error_shows_real_cause(monkeypatch, capsys, tmp_path):
+    # 403 (sai API key) không được báo như "chưa bật Docker" mà phải nêu nguyên nhân thật
+    _clean_env(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+
+    def denied(client, where):
+        raise indexer.QdrantUnavailableError(where) from PermissionError("403 Forbidden")
+
+    monkeypatch.setattr(indexer, "check_connection", denied)
+    assert indexer.main(["--pdf-dir", str(tmp_path), "--local"]) == 1
+    assert "403 Forbidden" in capsys.readouterr().err
