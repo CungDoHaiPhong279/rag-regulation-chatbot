@@ -92,7 +92,7 @@ Quy trình này **không tự kích hoạt** khi làm việc theo Tuần. Chỉ 
 
 ### Indexing (Qdrant)
 - ID chunk cố định, băm từ `source_file + page_number + chunk_index`.
-- Index lại một file thì **xóa chunk cũ của file đó trước**, rồi mới thêm mới.
+- Index lại một file: **upsert chunk mới trước** (ghi đè point trùng ID), rồi **xóa các point cũ có ID không còn trong tập mới** (tránh mất sạch dữ liệu nếu upsert lỗi giữa chừng).
 - Collection dùng named vectors (dense + sparse), xem mục 2.
 - Nếu Qdrant chưa chạy: báo lỗi dễ hiểu, gợi ý cách bật. Phương án dự phòng khi Docker trục trặc: Qdrant local mode (`qdrant-client` chạy bằng file, không cần server).
 

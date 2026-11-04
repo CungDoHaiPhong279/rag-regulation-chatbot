@@ -543,12 +543,10 @@ Expected: FAIL — `ModuleNotFoundError: tests.ingestion.fakes` / `ImportError`
 
 `index_chunks` — thứ tự bắt buộc, **theo từng `source_file`**:
 1. Gom chunk theo `source_file`.
-2. **Embed toàn bộ** chunk của file: `vectors = embedder.embed_dense([c.text for c in file_chunks])`; kiểm tra `len(vectors) == len(file_chunks)`. Lỗi ở bước này → exception bay ra, chưa đụng gì tới Qdrant.
-3. `delete_file_chunks(client, collection, source_file)` — `FilterSelector(Filter(must=[FieldCondition(key="source_file", match=MatchValue(value=source_file))]))`, `wait=True`.
-4. Upsert theo lô `upsert_batch_size`: `PointStruct(id=c.chunk_id, vector={DENSE_VECTOR_NAME: v}, payload={source_file, page_number, article, chunk_index, text})`, `wait=True`.
+2. **Embed toàn bộ** chunk của file theo lô: `vectors = embedder.embed_dense([c.text for c in file_chunks])`; kiểm tra `len(vectors) == len(file_chunks)`. Lỗi ở bước này → exception bay ra, chưa đụng gì tới Qdrant.
+3. **Upsert chunk mới trước theo lô** `upsert_batch_size`: `PointStruct(id=c.chunk_id, vector={DENSE_VECTOR_NAME: v}, payload={source_file, page_number, article, chunk_index, text})`, `wait=True` (ghi đè ngay các point có cùng chunk_id). Nếu upsert lỗi, dữ liệu cũ vẫn còn nguyên.
+4. **Xóa các point cũ có ID không còn trong tập mới** (ví dụ trường hợp file bị thu nhỏ từ 5 trang xuống 3 trang): truy vấn lấy danh sách ID cũ của file đó trong collection, so sánh với tập new_ids, nếu có ID thừa thì xóa bằng `client.delete(points=stale_ids, wait=True)`.
 5. Trả tổng số point đã upsert.
-
-*Giới hạn còn lại (ghi vào docstring + README):* Qdrant không có transaction, nên nếu upsert lỗi **sau** khi xóa (vd. mất kết nối giữa chừng) thì file đó tạm thiếu dữ liệu — chạy lại lệnh index là khôi phục, vì ID cố định.
 
 `main`: `load_settings()` → `--local` ép `qdrant_path="./qdrant_local"` → `chunk_directory` (cảnh báo file bị bỏ qua ra stderr; không có chunk → stderr + `return 1`) → `get_client` + `client.get_collections()` trong `try/except Exception` → lỗi thì stderr:
 `Không kết nối được Qdrant tại {url}. Bật Docker và chạy "docker compose up -d", hoặc chạy lại với --local (hoặc đặt QDRANT_PATH trong .env) để dùng Qdrant local mode.` và `return 1` → **sau đó mới** `BgeM3Embedder(settings.embedding_model)` → `ensure_collection(..., embedder.dense_dim, recreate)` → `index_chunks` → in `Đã index {n} chunks từ {k} file vào '{collection}'` → `return 0`.
