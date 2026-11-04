@@ -158,3 +158,5 @@ Builder chỉ được tuyên bố hoàn thành Task 2 khi toàn bộ các tiêu
 - [x] **Tiêu chí 18 (TextSplitter Separators):** Sử dụng `separators=["\n\n", "\n", ". ", "; ", " ", ""]` để tránh cắt cụt câu giữa chừng.
 - [x] **Tiêu chí 19 (Kiểm thử & Review độc lập):** Toàn bộ unit tests PASS 100%; Subagent Critic độc lập kiểm toán thực tế và duyệt `APPROVED`.
 
+
+> **Nghiệm thu bổ sung (2026-11-05, spec 2026-11-04):** PDF hỏng/khóa/tự sửa/0 trang bị bỏ qua. Critic vòng 1, 2 REJECTED (`docs/reviews/task-3-chunker-r1.md`, `-r2.md`) → đã sửa → kiểm chứng APPROVED (`docs/reviews/task-3-6-verify-r3.md`).
