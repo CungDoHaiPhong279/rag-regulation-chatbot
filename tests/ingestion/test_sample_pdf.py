@@ -40,3 +40,12 @@ def test_repeated_header_footer_on_every_page(tmp_path):
     for page in fitz.open(out):
         assert "TRƯỜNG ĐẠI HỌC MẪU" in page.get_text()
 
+
+
+def test_sample_output_is_outside_corpus_dir():
+    # PDF mẫu là dữ liệu hư cấu: không được nằm trong data/pdfs/ (thư mục indexer đọc)
+    from src.ingestion.sample_pdf import REPO_ROOT, SAMPLE_OUTPUT_PATH
+
+    corpus_dir = REPO_ROOT / "data" / "pdfs"
+    assert corpus_dir not in SAMPLE_OUTPUT_PATH.parents
+    assert SAMPLE_OUTPUT_PATH.name == "quy_che_mau.pdf"

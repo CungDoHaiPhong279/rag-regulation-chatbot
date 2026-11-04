@@ -4,10 +4,11 @@ import unicodedata
 import fitz
 import pytest
 
-from src.ingestion.sample_pdf import build_sample_pdf
+from src.ingestion.sample_pdf import FONT_PATH, build_sample_pdf
 from src.ingestion.chunker import (
     ARTICLE_HEADING_RE,
     PdfNoTextError,
+    PdfUnreadableError,
     SkippedPage,
     chunk_directory,
     chunk_pages,
@@ -50,8 +51,7 @@ def _pdf_with_blank_and_text_pages(path):
 
     # Trang 3: văn bản tiếng Việt
     p3 = doc.new_page()
-    font_path = Path("assets/fonts/NotoSans-Regular.ttf")
-    font = fitz.Font(fontfile=str(font_path))
+    font = fitz.Font(fontfile=str(FONT_PATH))
     p3.insert_font(fontname="noto", fontbuffer=font.buffer)
     p3.insert_text(
         fitz.Point(72, 100),
@@ -503,3 +503,44 @@ def test_chunk_pages_joins_soft_lines_into_coherent_chunk():
     # Khoản '1.' vẫn ở dòng riêng
     assert "\n1. Áp dụng cho sinh viên toàn trường." in chunks[0].text
 
+
+
+# --- PDF hỏng / bị khóa ---
+def _encrypted_pdf(path):
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text(fitz.Point(72, 100), "Dieu 1. Pham vi", fontsize=12)
+    doc.save(path, encryption=fitz.PDF_ENCRYPT_AES_256, user_pw="x", owner_pw="y")
+    doc.close()
+
+
+def test_corrupt_pdf_raises_unreadable(tmp_path):
+    bad = tmp_path / "bad.pdf"
+    bad.write_bytes(b"not a pdf")
+    with pytest.raises(PdfUnreadableError, match="bad.pdf"):
+        chunk_pdf(bad)
+
+
+def test_encrypted_pdf_raises_unreadable(tmp_path):
+    locked = tmp_path / "locked.pdf"
+    _encrypted_pdf(locked)
+    with pytest.raises(PdfUnreadableError, match="locked.pdf"):
+        chunk_pdf(locked)
+
+
+def test_directory_skips_corrupt_and_continues(tmp_path, capsys):
+    build_sample_pdf(tmp_path / "ok.pdf")
+    (tmp_path / "bad.pdf").write_bytes(b"not a pdf")
+    chunks, skipped = chunk_directory(tmp_path)
+    assert skipped == ["bad.pdf"]
+    assert chunks and {c.source_file for c in chunks} == {"ok.pdf"}
+    assert "Bỏ qua bad.pdf: file PDF hỏng hoặc bị khóa" in capsys.readouterr().err
+
+
+def test_cli_single_corrupt_file_returns_1(tmp_path, capsys):
+    from src.ingestion.chunker import main
+
+    bad = tmp_path / "bad.pdf"
+    bad.write_bytes(b"not a pdf")
+    assert main([str(bad)]) == 1
+    assert "file PDF hỏng hoặc bị khóa" in capsys.readouterr().err

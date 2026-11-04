@@ -14,7 +14,7 @@ Bạn chỉ nhận: đường dẫn hợp đồng nghiệm thu và danh sách fi
 ## Bắt buộc
 1. **Chạy thật**, dán output thật (phần cuối đủ để thấy kết quả):
    - `.venv\Scripts\python -m pytest -q` (từ thư mục gốc repo).
-   - CLI liên quan trên PDF mẫu, ví dụ `.venv\Scripts\python -m src.ingestion.chunker data/pdfs/quy_che_mau.pdf`
+   - CLI liên quan trên PDF mẫu, ví dụ `.venv\Scripts\python -m src.ingestion.chunker data/samples/quy_che_mau.pdf`
      (tạo PDF mẫu bằng `.venv\Scripts\python -m src.ingestion.sample_pdf` nếu chưa có).
    Không được chỉ đọc code rồi nhận xét.
 2. **Thử phá code (mutation testing)**: tự chọn ít nhất 3 phép phá nhắm vào bất biến quan trọng (ví dụ làm lệch

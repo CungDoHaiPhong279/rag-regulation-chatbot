@@ -72,6 +72,10 @@ class PdfNoTextError(Exception):
     """Ném ra khi file PDF không có lớp văn bản (PDF bản scan ảnh)."""
 
 
+class PdfUnreadableError(Exception):
+    """Ném ra khi file PDF hỏng (không mở được) hoặc bị khóa bằng mật khẩu."""
+
+
 @dataclass(frozen=True)
 class SkippedPage:
     """Thông tin về một trang không có lớp chữ bị bỏ qua."""
@@ -521,7 +525,14 @@ def chunk_pdf(
 ) -> tuple[list[Chunk], list[SkippedPage]]:
     """Đọc các trang văn bản và hình ảnh từ một file PDF rồi chuyển cho chunk_pages xử lý."""
     pdf_path = Path(pdf_path)
-    doc = fitz.open(pdf_path)
+    unreadable_msg = f"{pdf_path.name}: file PDF hỏng hoặc bị khóa"
+    try:
+        doc = fitz.open(pdf_path)
+    except Exception as exc:  # PyMuPDF ném nhiều loại lỗi khác nhau cho file hỏng
+        raise PdfUnreadableError(unreadable_msg) from exc
+    if doc.needs_pass:
+        doc.close()
+        raise PdfUnreadableError(unreadable_msg)
     try:
         page_texts: list[str] = []
         page_has_images: list[bool] = []
@@ -575,6 +586,12 @@ def chunk_directory(
                 f"Bỏ qua {pdf_file.name}: không có lớp chữ (PDF scan?) — cần OCR",
                 file=sys.stderr,
             )
+        except PdfUnreadableError:
+            skipped_files.append(pdf_file.name)
+            print(
+                f"Bỏ qua {pdf_file.name}: file PDF hỏng hoặc bị khóa",
+                file=sys.stderr,
+            )
 
     return all_chunks, skipped_files
 
@@ -617,7 +634,7 @@ def main(argv: list[str] | None = None) -> int:
                 all_removed.append((target.name, item))
             for sp in skipped_pages:
                 all_skipped_pages.append((target.name, sp))
-        except PdfNoTextError as exc:
+        except (PdfNoTextError, PdfUnreadableError) as exc:
             print(f"Bỏ qua {exc}", file=sys.stderr)
             return 1
     else:
