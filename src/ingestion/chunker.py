@@ -526,6 +526,8 @@ def chunk_pdf(
     """Đọc các trang văn bản và hình ảnh từ một file PDF rồi chuyển cho chunk_pages xử lý."""
     pdf_path = Path(pdf_path)
     unreadable_msg = f"{pdf_path.name}: file PDF hỏng hoặc bị khóa"
+    # Lỗi cấu trúc PDF được báo bằng ngoại lệ của mình; tắt log thô của MuPDF in ra stdout
+    fitz.TOOLS.mupdf_display_errors(False)
     try:
         doc = fitz.open(pdf_path)
     except Exception as exc:  # PyMuPDF ném nhiều loại lỗi khác nhau cho file hỏng
@@ -534,6 +536,8 @@ def chunk_pdf(
         doc.close()
         raise PdfUnreadableError(unreadable_msg)
     try:
+        # is_repaired: MuPDF đã phải tự sửa cấu trúc file (thường do file tải về bị cắt cụt)
+        repaired = doc.is_repaired
         page_texts: list[str] = []
         page_has_images: list[bool] = []
         for page in doc:
@@ -542,14 +546,26 @@ def chunk_pdf(
     finally:
         doc.close()
 
-    return chunk_pages(
-        page_texts=page_texts,
-        source_file=pdf_path.name,
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        removed_lines_collector=removed_lines_collector,
-        page_has_images=page_has_images,
-    )
+    try:
+        result = chunk_pages(
+            page_texts=page_texts,
+            source_file=pdf_path.name,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            removed_lines_collector=removed_lines_collector,
+            page_has_images=page_has_images,
+        )
+    except PdfNoTextError as exc:
+        # File hỏng mất hết chữ không phải PDF scan: người dùng cần tải lại file, không cần OCR
+        if repaired:
+            raise PdfUnreadableError(unreadable_msg) from exc
+        raise
+    if repaired:
+        print(
+            f"Cảnh báo [{pdf_path.name}]: file PDF bị lỗi cấu trúc và đã được tự sửa — có thể thiếu nội dung.",
+            file=sys.stderr,
+        )
+    return result
 
 
 def chunk_directory(
@@ -653,7 +669,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Tổng số chunk sinh ra : {len(chunks)}")
     print(f"Số Điều nhận diện được: {len(articles)} -> {articles}")
     if skipped:
-        print(f"File bị bỏ qua (scan) : {skipped}")
+        print(f"File bị bỏ qua (scan / hỏng / bị khóa): {skipped}")
 
     if all_skipped_pages:
         print(f"\nDanh sách trang không có lớp chữ bị bỏ qua ({len(all_skipped_pages)} trang):")

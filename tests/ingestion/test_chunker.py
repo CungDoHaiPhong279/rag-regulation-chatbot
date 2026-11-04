@@ -544,3 +544,37 @@ def test_cli_single_corrupt_file_returns_1(tmp_path, capsys):
     bad.write_bytes(b"not a pdf")
     assert main([str(bad)]) == 1
     assert "file PDF hỏng hoặc bị khóa" in capsys.readouterr().err
+
+
+# --- Critic vòng 1 (docs/reviews/task-3-chunker-r1.md) ---
+def test_truncated_pdf_reported_as_unreadable(tmp_path):
+    src = tmp_path / "full.pdf"
+    build_sample_pdf(src)
+    data = src.read_bytes()
+    trunc = tmp_path / "trunc.pdf"
+    trunc.write_bytes(data[: len(data) // 2])
+    with pytest.raises(PdfUnreadableError, match="trunc.pdf"):
+        chunk_pdf(trunc)
+
+
+def test_chapter_heading_at_page_bottom_resets_next_page():
+    pages = [
+        "Điều 4. Đánh giá\nNội dung Điều 4.\nChương II",
+        "TỔ CHỨC ĐÀO TẠO\nNội dung mở đầu chương.\nĐiều 5. Học phí\nMức học phí.",
+    ]
+    chunks, _ = chunk_pages(pages, "x.pdf", 800, 150)
+    page2 = [c for c in chunks if c.page_number == 2]
+    assert page2[0].article is None
+    assert not page2[0].text.startswith("Điều 4")
+    assert page2[1].article == "Điều 5. Học phí"
+
+
+def test_directory_output_has_no_mupdf_noise_and_honest_label(tmp_path, capsys):
+    from src.ingestion.chunker import main
+
+    build_sample_pdf(tmp_path / "ok.pdf")
+    (tmp_path / "bad.pdf").write_bytes(b"not a pdf")
+    assert main([str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "MuPDF error" not in out
+    assert "(scan)" not in out and "bad.pdf" in out
