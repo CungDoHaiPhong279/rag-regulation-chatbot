@@ -16,6 +16,8 @@ from src.utils import setup_utf8_console
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FONT_PATH: Path = REPO_ROOT / "assets" / "fonts" / "NotoSans-Regular.ttf"
 SAMPLE_FILENAME: str = "quy_che_mau.pdf"
+# PDF mẫu là dữ liệu HƯ CẤU (chỉ để kiểm thử): đặt ngoài data/pdfs/ để indexer không đưa vào kho thật.
+SAMPLE_OUTPUT_PATH: Path = REPO_ROOT / "data" / "samples" / SAMPLE_FILENAME
 
 HEADER_TEXT = "TRƯỜNG ĐẠI HỌC MẪU — QUY CHẾ ĐÀO TẠO"
 
@@ -177,9 +179,9 @@ def build_sample_pdf(out_path: Path) -> dict[str, int]:
 
 
 def main() -> None:
-    """Sinh file PDF quy chế mẫu vào thư mục data/pdfs/quy_che_mau.pdf."""
+    """Sinh file PDF quy chế mẫu vào data/samples/quy_che_mau.pdf (ngoài kho tài liệu thật)."""
     setup_utf8_console()
-    target = REPO_ROOT / "data" / "pdfs" / SAMPLE_FILENAME
+    target = SAMPLE_OUTPUT_PATH
     mapping = build_sample_pdf(target)
     print(f"Đã tạo PDF quy chế mẫu tại: {target}")
     for article, page_num in mapping.items():
