@@ -117,7 +117,7 @@ Named vectors: `dense` (1024, Cosine), `sparse` (`SparseVectorParams(modifier=ID
 2. `chunk_directory` cả thư mục → chunks, file bị bỏ qua, trang bị bỏ qua.
 3. `avgdl` trên toàn bộ chunk; mỗi chunk → dense (BGE-M3) + sparse (BM25).
 4. Embed xong toàn bộ → upsert theo lô (`wait=True`).
-5. Chỉ khi upsert thành công: xóa point có ID không thuộc tập mới (scroll phân trang, không lấy vector/payload),
+5. Chỉ khi upsert thành công: xóa point có ID không thuộc tập mới (scroll phân trang, không lấy vector, chỉ lấy payload `source_file` để giữ point của file bị bỏ qua),
    gồm cả point của file không còn trong thư mục.
 6. In báo cáo: số file, số chunk, file/trang bị bỏ qua.
 
