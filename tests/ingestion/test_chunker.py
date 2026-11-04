@@ -569,12 +569,83 @@ def test_chapter_heading_at_page_bottom_resets_next_page():
     assert page2[1].article == "Điều 5. Học phí"
 
 
+def _corrupt_content_stream(src, dst):
+    """Hỏng luồng nội dung trang 1 nhưng giữ nguyên độ dài (xref vẫn đúng, is_repaired=False):
+    MuPDF in 'MuPDF error: ... zlib error' khi đọc chữ trang đó."""
+    data = bytearray(src.read_bytes())
+    doc = fitz.open(src)
+    xref = doc[0].get_contents()[0]
+    doc.close()
+    start = data.index(f"\n{xref} 0 obj".encode())
+    body = data.index(b"stream", start) + len(b"stream\n")
+    data[body + 5 : body + 45] = b"x" * 40
+    dst.write_bytes(bytes(data))
+
+
 def test_directory_output_has_no_mupdf_noise_and_honest_label(tmp_path, capsys):
+    # Log MuPDF in qua bộ đệm stdio của C (xả sau khi pytest thu output) nên không quan sát được
+    # bằng capsys/capfd -> kiểm tra trực tiếp cờ hiển thị lỗi của PyMuPDF đã bị tắt.
     from src.ingestion.chunker import main
 
     build_sample_pdf(tmp_path / "ok.pdf")
-    (tmp_path / "bad.pdf").write_bytes(b"not a pdf")
-    assert main([str(tmp_path)]) == 0
+    data = (tmp_path / "ok.pdf").read_bytes()
+    (tmp_path / "trunc.pdf").write_bytes(data[: len(data) // 2])
+    _corrupt_content_stream(tmp_path / "ok.pdf", tmp_path / "stream.pdf")
+    fitz.TOOLS.mupdf_display_errors(True)
+    try:
+        assert main([str(tmp_path)]) == 0
+        assert fitz.TOOLS.mupdf_display_errors() is False
+    finally:
+        fitz.TOOLS.mupdf_display_errors(False)
     out = capsys.readouterr().out
-    assert "MuPDF error" not in out
-    assert "(scan)" not in out and "bad.pdf" in out
+    assert "(scan)" not in out and "trunc.pdf" in out
+
+
+# --- Critic vòng 2 (docs/reviews/task-3-chunker-r2.md) ---
+def _xref_corrupted_sample(tmp_path):
+    """PDF mẫu hỏng bảng xref: MuPDF tự sửa được và VẪN đọc ra chữ (is_repaired=True)."""
+    import re
+
+    src = tmp_path / "src.pdf"
+    build_sample_pdf(src)
+    bad = re.sub(rb"startxref\s+\d+", b"startxref\n999999", src.read_bytes())
+    out = tmp_path / "repaired.pdf"
+    out.write_bytes(bad)
+    return out
+
+
+def test_repaired_pdf_with_text_is_unreadable(tmp_path):
+    # File phải tự sửa có thể cho chữ rác (PDF thật cắt cụt -> 129 chunk rác): không index, báo tải lại.
+    with pytest.raises(PdfUnreadableError, match="repaired.pdf"):
+        chunk_pdf(_xref_corrupted_sample(tmp_path))
+
+
+def test_repaired_pdf_skipped_in_directory(tmp_path, capsys):
+    build_sample_pdf(tmp_path / "ok.pdf")
+    _xref_corrupted_sample(tmp_path)
+    (tmp_path / "src.pdf").unlink()
+    chunks, skipped = chunk_directory(tmp_path)
+    assert skipped == ["repaired.pdf"] and {c.source_file for c in chunks} == {"ok.pdf"}
+    assert "Bỏ qua repaired.pdf: file PDF hỏng hoặc bị khóa" in capsys.readouterr().err
+
+
+def test_zero_page_pdf_is_unreadable(tmp_path):
+    z = tmp_path / "zero.pdf"
+    z.write_bytes(
+        b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+        b"2 0 obj<</Type/Pages/Kids[]/Count 0>>endobj\n"
+        b"trailer<</Size 3/Root 1 0 R>>\n%%EOF\n"
+    )
+    with pytest.raises(PdfUnreadableError, match="zero.pdf"):
+        chunk_pdf(z)
+
+
+def test_chunk_params_follow_config_rules(monkeypatch):
+    # Cùng quy tắc với src/config.py: chuỗi rỗng = mặc định; giá trị sai báo tên biến
+    monkeypatch.setenv("CHUNK_SIZE", "")
+    monkeypatch.delenv("CHUNK_OVERLAP", raising=False)
+    chunks, _ = chunk_pages(["Điều 1. A\nNội dung."], "x.pdf")
+    assert chunks and len(chunks[0].text) <= 800
+    monkeypatch.setenv("CHUNK_OVERLAP", "abc")
+    with pytest.raises(ValueError, match="CHUNK_OVERLAP"):
+        chunk_pages(["Điều 1. A\nNội dung."], "x.pdf")

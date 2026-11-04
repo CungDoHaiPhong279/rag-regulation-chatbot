@@ -18,17 +18,16 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from dataclasses import dataclass
-import os
 from pathlib import Path
 import re
 import sys
 import unicodedata
 from uuid import NAMESPACE_URL, uuid5
 
-from dotenv import load_dotenv
 import fitz
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from src.config import load_settings
 from src.utils import setup_utf8_console
 
 # Nhóm 1: số Điều, Nhóm 2: tên Điều (bắt buộc có dấu "." hoặc ":" ngay sau số Điều)
@@ -397,19 +396,14 @@ def _resolve_chunk_params(
     chunk_size: int | None,
     chunk_overlap: int | None,
 ) -> tuple[int, int]:
-    """Đọc chunk_size và chunk_overlap từ tham số truyền vào hoặc từ biến môi trường."""
-    load_dotenv()
-    resolved_size = (
-        chunk_size
-        if chunk_size is not None
-        else int(os.getenv("CHUNK_SIZE", str(DEFAULT_CHUNK_SIZE)))
+    """Tham số truyền vào được ưu tiên; thiếu thì lấy từ cấu hình chung (src/config.py, đọc .env)."""
+    if chunk_size is not None and chunk_overlap is not None:
+        return chunk_size, chunk_overlap
+    settings = load_settings()
+    return (
+        chunk_size if chunk_size is not None else settings.chunk_size,
+        chunk_overlap if chunk_overlap is not None else settings.chunk_overlap,
     )
-    resolved_overlap = (
-        chunk_overlap
-        if chunk_overlap is not None
-        else int(os.getenv("CHUNK_OVERLAP", str(DEFAULT_CHUNK_OVERLAP)))
-    )
-    return resolved_size, resolved_overlap
 
 
 def chunk_pages(
@@ -532,12 +526,13 @@ def chunk_pdf(
         doc = fitz.open(pdf_path)
     except Exception as exc:  # PyMuPDF ném nhiều loại lỗi khác nhau cho file hỏng
         raise PdfUnreadableError(unreadable_msg) from exc
-    if doc.needs_pass:
+    # needs_pass: bị khóa mật khẩu. is_repaired: MuPDF phải tự sửa cấu trúc (thường do file tải về bị
+    # cắt cụt) — chữ đọc ra có thể là rác (đã gặp: PDF thật cắt 50% -> 129 chunk rác, 0 Điều), nên không
+    # index mà báo người dùng tải lại. 0 trang: cây trang hỏng.
+    if doc.needs_pass or doc.is_repaired or len(doc) == 0:
         doc.close()
         raise PdfUnreadableError(unreadable_msg)
     try:
-        # is_repaired: MuPDF đã phải tự sửa cấu trúc file (thường do file tải về bị cắt cụt)
-        repaired = doc.is_repaired
         page_texts: list[str] = []
         page_has_images: list[bool] = []
         for page in doc:
@@ -546,26 +541,14 @@ def chunk_pdf(
     finally:
         doc.close()
 
-    try:
-        result = chunk_pages(
-            page_texts=page_texts,
-            source_file=pdf_path.name,
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-            removed_lines_collector=removed_lines_collector,
-            page_has_images=page_has_images,
-        )
-    except PdfNoTextError as exc:
-        # File hỏng mất hết chữ không phải PDF scan: người dùng cần tải lại file, không cần OCR
-        if repaired:
-            raise PdfUnreadableError(unreadable_msg) from exc
-        raise
-    if repaired:
-        print(
-            f"Cảnh báo [{pdf_path.name}]: file PDF bị lỗi cấu trúc và đã được tự sửa — có thể thiếu nội dung.",
-            file=sys.stderr,
-        )
-    return result
+    return chunk_pages(
+        page_texts=page_texts,
+        source_file=pdf_path.name,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        removed_lines_collector=removed_lines_collector,
+        page_has_images=page_has_images,
+    )
 
 
 def chunk_directory(
