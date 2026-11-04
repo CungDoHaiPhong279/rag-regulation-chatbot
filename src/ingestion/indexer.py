@@ -97,11 +97,24 @@ def ensure_collection(client: QdrantClient, name: str, dense_dim: int, recreate:
             f"Collection '{name}' có dense vector dim={current_dim}, khác với embedder dim={dense_dim}. "
             f"{_recreate_hint(name)}"
         )
+    if vectors[DENSE_VECTOR_NAME].distance != models.Distance.COSINE:
+        raise CollectionSchemaError(
+            f"Collection '{name}' dùng distance={vectors[DENSE_VECTOR_NAME].distance}, cần Cosine. "
+            f"{_recreate_hint(name)}"
+        )
     sparse = (params.sparse_vectors or {}).get(SPARSE_VECTOR_NAME)
     if sparse is None or sparse.modifier != models.Modifier.IDF:
         raise CollectionSchemaError(
             f"Collection '{name}' thiếu sparse vector '{SPARSE_VECTOR_NAME}' với modifier=IDF (cần cho BM25). "
             f"{_recreate_hint(name)}"
+        )
+    # Thiếu payload index thì tạo bù (thao tác idempotent; local mode không báo schema nên luôn gọi)
+    schema = client.get_collection(name).payload_schema or {}
+    if "source_file" not in schema:
+        client.create_payload_index(
+            collection_name=name,
+            field_name="source_file",
+            field_schema=models.PayloadSchemaType.KEYWORD,
         )
 
 
@@ -192,7 +205,11 @@ def main(argv: list[str] | None = None) -> int:
     setup_utf8_console()
     parser = argparse.ArgumentParser(description="Index PDF quy chế vào Qdrant (dense BGE-M3 + sparse BM25).")
     parser.add_argument("--pdf-dir", type=Path, default=Path("data/pdfs"))
-    parser.add_argument("--recreate", action="store_true", help="Xóa và tạo lại collection.")
+    parser.add_argument(
+        "--recreate",
+        action="store_true",
+        help="Xóa và tạo lại collection TRƯỚC khi embed; nếu embed lỗi sau đó, collection sẽ trống (chạy lại là đủ).",
+    )
     parser.add_argument("--local", action="store_true", help=f"Dùng Qdrant local mode tại {LOCAL_QDRANT_PATH}.")
     parser.add_argument("--collection", default=None, help="Tên collection (mặc định QDRANT_COLLECTION).")
     args = parser.parse_args(argv)
@@ -203,18 +220,27 @@ def main(argv: list[str] | None = None) -> int:
     collection = args.collection or settings.collection
     where = settings.qdrant_path or settings.qdrant_url
 
-    # Kiểm tra Qdrant trước khi cắt chunk và tải model nặng
-    client = get_client(settings)
+    # Kiểm tra Qdrant trước khi cắt chunk và tải model nặng.
+    # get_client cũng có thể lỗi (local mode: thư mục đang bị API/Streamlit giữ khóa).
     try:
+        client = get_client(settings)
         check_connection(client, where)
-    except QdrantUnavailableError:
+    except Exception as exc:
+        detail = f" ({exc})" if not isinstance(exc, QdrantUnavailableError) else ""
         print(
-            f'Không kết nối được Qdrant tại {where}. Chạy "docker compose up -d" hoặc thêm --local '
-            "(hoặc đặt QDRANT_PATH trong .env) để dùng Qdrant local mode.",
+            f'Không kết nối được Qdrant tại {where}{detail}. Chạy "docker compose up -d" hoặc thêm --local '
+            "(hoặc đặt QDRANT_PATH trong .env) để dùng Qdrant local mode. Nếu dùng local mode, hãy tắt "
+            "tiến trình khác đang mở cùng thư mục (API, Streamlit).",
             file=sys.stderr,
         )
         return 1
+    try:
+        return _index_with_client(args, settings, client, collection)
+    finally:
+        client.close()
 
+
+def _index_with_client(args: argparse.Namespace, settings: Settings, client: QdrantClient, collection: str) -> int:
     if not args.pdf_dir.is_dir():
         print(f"Không tìm thấy thư mục PDF: {args.pdf_dir}", file=sys.stderr)
         return 1
@@ -240,15 +266,20 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    report = index_corpus(
-        client,
-        chunks,
-        embedder,
-        collection,
-        preserve_files=frozenset(skipped_files),
-        k1=settings.bm25_k1,
-        b=settings.bm25_b,
-    )
+    try:
+        report = index_corpus(
+            client,
+            chunks,
+            embedder,
+            collection,
+            preserve_files=frozenset(skipped_files),
+            k1=settings.bm25_k1,
+            b=settings.bm25_b,
+        )
+    except Exception as exc:
+        # index_corpus chỉ xóa point thừa sau khi upsert xong, nên lỗi ở đây không làm mất dữ liệu cũ
+        print(f"Lỗi khi index: {exc}. Dữ liệu cũ được giữ nguyên; sửa lỗi rồi chạy lại.", file=sys.stderr)
+        return 1
 
     print(f"Đã index {report.upserted} chunks từ {len(report.files)} file vào '{collection}': {report.files}")
     print(f"Đã xóa {report.deleted_stale} point thừa.")
@@ -259,7 +290,6 @@ def main(argv: list[str] | None = None) -> int:
         for filename, page in skipped_pages:
             kind = "scan ảnh" if page.reason == "scan" else "trang trắng"
             print(f"  - [{filename} | Trang {page.page_number}]: {kind}")
-    client.close()
     return 0
 
 

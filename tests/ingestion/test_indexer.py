@@ -217,3 +217,151 @@ def test_cli_end_to_end_local(monkeypatch, capsys, tmp_path):
     pts, _ = c.scroll("regulations", limit=1000, with_payload=True)
     assert pts and {p.payload["source_file"] for p in pts} == {"a.pdf"}
     c.close()
+
+
+# --- Critic vòng 1 (docs/reviews/task-6-indexer-r1.md) ---
+def _spy(monkeypatch, client, name, calls):
+    original = getattr(client, name)
+
+    def wrapper(*args, **kwargs):
+        calls.append((name, kwargs))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(client, name, wrapper)
+
+
+def test_cli_preserves_points_of_file_that_became_corrupt(monkeypatch, capsys, tmp_path):
+    # #1: PDF đã index bị hỏng ở lần chạy sau -> dữ liệu cũ của nó phải được giữ
+    from src.ingestion.sample_pdf import build_sample_pdf
+
+    _clean_env(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    pdfs = tmp_path / "pdfs"
+    build_sample_pdf(pdfs / "a.pdf")
+    build_sample_pdf(pdfs / "b.pdf")
+    monkeypatch.setattr(indexer, "BgeM3Embedder", lambda *a, **k: FakeEmbedder())
+    assert indexer.main(["--pdf-dir", str(pdfs), "--local"]) == 0
+    (pdfs / "b.pdf").write_bytes(b"not a pdf")
+    assert indexer.main(["--pdf-dir", str(pdfs), "--local"]) == 0
+    c = QdrantClient(path=str(tmp_path / "qdrant_local"))
+    pts, _ = c.scroll("regulations", limit=1000, with_payload=True)
+    c.close()
+    per_file = {}
+    for p in pts:
+        per_file[p.payload["source_file"]] = per_file.get(p.payload["source_file"], 0) + 1
+    assert per_file["b.pdf"] == per_file["a.pdf"] > 0
+
+
+def test_avgdl_computed_over_whole_corpus():
+    # #2: trọng số BM25 của một chunk phụ thuộc avgdl của TOÀN kho, không chỉ file của nó
+    from src.ingestion.sparse import average_doc_length, bm25_doc_vector, tokenize
+
+    short = mk("a.pdf", 1)
+    long_text = "Điều 9. Dài: " + "sinh viên đăng ký tín chỉ học phần " * 20
+    long = [dataclasses.replace(mk("b.pdf", 1)[0], text=long_text)]
+    corpus = short + long
+    c = QdrantClient(":memory:")
+    ensure_collection(c, COL, 8)
+    index_corpus(c, corpus, FakeEmbedder(), COL)
+    (pt,) = c.retrieve(COL, [short[0].chunk_id], with_vectors=True)
+    avgdl = average_doc_length([tokenize(x.text) for x in corpus])
+    expected = bm25_doc_vector(tokenize(short[0].text), avgdl)
+    stored = dict(zip(pt.vector[SPARSE_VECTOR_NAME].indices, pt.vector[SPARSE_VECTOR_NAME].values))
+    assert stored == pytest.approx(dict(zip(expected.indices, expected.values)))
+    alone = bm25_doc_vector(tokenize(short[0].text), average_doc_length([tokenize(short[0].text)]))
+    assert stored != pytest.approx(dict(zip(alone.indices, alone.values)))
+
+
+def test_payload_index_created_for_source_file(monkeypatch):
+    # #3: Qdrant local không báo payload_schema -> kiểm bằng spy lời gọi
+    c = QdrantClient(":memory:")
+    calls = []
+    _spy(monkeypatch, c, "create_payload_index", calls)
+    ensure_collection(c, COL, 8)
+    assert calls and calls[0][1]["field_name"] == "source_file"
+    assert calls[0][1]["field_schema"] == models.PayloadSchemaType.KEYWORD
+
+
+def test_payload_chunk_index_preserved(client):
+    # #4: nhiều chunk cùng trang, chunk_index 0..2 phải giữ nguyên trong payload
+    base = mk("a.pdf", 1)[0]
+    chunks = [
+        dataclasses.replace(base, chunk_id=str(uuid5(NAMESPACE_URL, f"a.pdf:1:{i}")), chunk_index=i, text=f"{base.text} phần {i}")
+        for i in range(3)
+    ]
+    index_corpus(client, chunks, FakeEmbedder(), COL)
+    by_id = {c.chunk_id: c for c in chunks}
+    pts, _ = client.scroll(COL, limit=10, with_payload=True)
+    assert sorted(p.payload["chunk_index"] for p in pts) == [0, 1, 2]
+    for p in pts:
+        assert p.payload["chunk_index"] == by_id[str(p.id)].chunk_index
+
+
+def test_upsert_and_delete_wait_for_completion(client, monkeypatch):
+    # #5: mọi lệnh ghi/xóa phải wait=True
+    index_corpus(client, mk("a.pdf", 5), FakeEmbedder(), COL)
+    calls = []
+    _spy(monkeypatch, client, "upsert", calls)
+    _spy(monkeypatch, client, "delete", calls)
+    index_corpus(client, mk("a.pdf", 3), FakeEmbedder(), COL)
+    assert {name for name, _ in calls} == {"upsert", "delete"}
+    assert all(kw.get("wait") is True for _, kw in calls)
+
+
+def test_existing_collection_wrong_distance_raises():
+    # #6
+    c = QdrantClient(":memory:")
+    c.create_collection(
+        COL,
+        vectors_config={DENSE_VECTOR_NAME: models.VectorParams(size=8, distance=models.Distance.DOT)},
+        sparse_vectors_config={SPARSE_VECTOR_NAME: models.SparseVectorParams(modifier=models.Modifier.IDF)},
+    )
+    with pytest.raises(CollectionSchemaError, match="Cosine|COSINE|cosine"):
+        ensure_collection(c, COL, 8)
+
+
+def test_existing_collection_missing_payload_index_is_created(monkeypatch):
+    # #6: collection đúng cấu trúc nhưng thiếu payload index -> tạo bù
+    c = QdrantClient(":memory:")
+    c.create_collection(
+        COL,
+        vectors_config={DENSE_VECTOR_NAME: models.VectorParams(size=8, distance=models.Distance.COSINE)},
+        sparse_vectors_config={SPARSE_VECTOR_NAME: models.SparseVectorParams(modifier=models.Modifier.IDF)},
+    )
+    calls = []
+    _spy(monkeypatch, c, "create_payload_index", calls)
+    ensure_collection(c, COL, 8)
+    assert calls and calls[0][1]["field_name"] == "source_file"
+
+
+def test_cli_embed_failure_is_friendly_and_keeps_data(monkeypatch, capsys, tmp_path):
+    # #7: lỗi khi index -> một dòng tiếng Việt, exit 1, không traceback, dữ liệu cũ còn
+    from src.ingestion.sample_pdf import build_sample_pdf
+
+    _clean_env(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    build_sample_pdf(tmp_path / "pdfs" / "a.pdf")
+    monkeypatch.setattr(indexer, "BgeM3Embedder", lambda *a, **k: FakeEmbedder())
+    assert indexer.main(["--pdf-dir", str(tmp_path / "pdfs"), "--local"]) == 0
+    capsys.readouterr()
+    monkeypatch.setattr(indexer, "BgeM3Embedder", lambda *a, **k: FailingEmbedder())
+    assert indexer.main(["--pdf-dir", str(tmp_path / "pdfs"), "--local"]) == 1
+    err = capsys.readouterr().err
+    assert "Lỗi khi index" in err and "embed failed" in err and "Traceback" not in err
+    c = QdrantClient(path=str(tmp_path / "qdrant_local"))
+    assert c.count("regulations").count > 0
+    c.close()
+
+
+def test_cli_local_storage_locked_is_friendly(monkeypatch, capsys, tmp_path):
+    # #7: thư mục local đang bị tiến trình khác (API/Streamlit) giữ khóa
+    _clean_env(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pdfs").mkdir()
+    holder = QdrantClient(path=str(tmp_path / "qdrant_local"))
+    try:
+        assert indexer.main(["--pdf-dir", str(tmp_path / "pdfs"), "--local"]) == 1
+    finally:
+        holder.close()
+    err = capsys.readouterr().err
+    assert "Không kết nối được Qdrant" in err and "Traceback" not in err
