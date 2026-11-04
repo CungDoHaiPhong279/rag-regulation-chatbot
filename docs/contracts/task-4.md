@@ -179,3 +179,17 @@ Builder chỉ được tuyên bố hoàn thành Task 4 khi toàn bộ các tiêu
 - [ ] **Tiêu chí 13 (Báo cáo tổng kết toàn diện):** CLI in đầy đủ số file, số chunk, danh sách file scan bị bỏ qua và danh sách trang không có lớp chữ bị bỏ qua (`SkippedPage`).
 - [ ] **Tiêu chí 14 (Tải lười & Zero-Torch Test):** `SentenceTransformer` được tải lười bên trong `BgeM3Embedder.__init__`; 100% unit tests chạy với `FakeEmbedder` và Qdrant in-memory (`:memory:`), thời gian chạy < 5 giây, không import `torch` ở top-level.
 - [ ] **Tiêu chí 15 (Bao phủ kiểm thử & Mutation Testing):** Đạt tối thiểu 14 test cases trong `tests/ingestion/test_indexer.py`; Critic thực hiện kiểm thử đột biến thành công trên bản sao và duyệt `APPROVED`.
+
+---
+
+## 5. Bổ sung theo spec 2026-11-04 (`docs/superpowers/specs/2026-11-04-rag-chatbot-design.md`)
+
+Các mục dưới đây **thay thế** điều khoản tương ứng ở trên khi mâu thuẫn. Plan thực hiện: `docs/superpowers/plans/2026-11-04-master-plan.md`, Task 6.
+
+1. **Sparse BM25 thật:** collection khai báo `sparse` với `SparseVectorParams(modifier=Modifier.IDF)`. Mỗi point ghi cả `dense` và `sparse`; giá trị sparse = phần tf bão hòa + chuẩn hóa độ dài của BM25 (`src/ingestion/sparse.py`), IDF do Qdrant nhân. Collection có `sparse` nhưng thiếu `modifier=IDF` → `CollectionSchemaError`, gợi ý `--recreate`.
+2. **Index toàn kho một lượt:** `index_corpus(client, chunks, embedder, collection, *, preserve_files, k1, b, upsert_batch_size)` nhận chunk của **toàn thư mục**, tính `avgdl` trên toàn bộ chunk (thay cho xử lý từng file riêng).
+3. **Dọn point thừa trên cả collection:** sau khi upsert thành công, xóa mọi point có ID không thuộc tập mới, **trừ** point có `source_file ∈ preserve_files` (file vẫn còn trong thư mục nhưng lượt này bị bỏ qua vì scan/hỏng). Hệ quả: file bị xóa hoặc đổi tên khỏi `data/pdfs/` thì point cũ bị dọn.
+4. **Không có chunk nào:** `index_corpus` với danh sách rỗng → `ValueError`, không chạm dữ liệu; CLI thoát mã 1, không xóa gì.
+5. **Lỗi dùng ngoại lệ riêng:** `QdrantUnavailableError` (kết nối), `CollectionSchemaError` (cấu trúc collection). Báo cáo trả về `IndexReport(upserted, deleted_stale, files)`.
+6. **Thứ tự CLI:** kiểm tra kết nối Qdrant → cắt chunk → tải `BgeM3Embedder` → `ensure_collection` → `index_corpus`. `chunk_size`/`chunk_overlap` lấy từ `Settings` (`src/config.py`). Thêm cờ `--collection` (dùng cho thí nghiệm `chunk_size`).
+7. **Danh sách test** (thay mục 3.5): `test_collection_has_dense_cosine_and_sparse_idf`, `test_payload_exact_schema_and_int_page`, `test_point_has_dense_and_sparse_vectors`, `test_reindex_same_data_no_duplicates`, `test_shrunk_file_stale_points_deleted`, `test_removed_file_points_deleted`, `test_preserved_file_points_kept`, `test_embed_failure_keeps_old_data`, `test_upsert_failure_skips_deletion`, `test_stale_cleanup_paginates`, `test_dimension_mismatch_raises`, `test_unnamed_or_missing_sparse_raises`, `test_recreate_resets_dimension`, `test_empty_chunks_raises_without_touching_data`, `test_local_mode_persists`, `test_cli_qdrant_down_fails_fast`, `test_cli_end_to_end_local`.
