@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from qdrant_client import QdrantClient, models
 
@@ -62,65 +62,38 @@ class HybridSearcher:
         - `sparse`: trả `[]` ngay, không gọi Qdrant.
         - `hybrid`: không gửi sparse vector rỗng mà chuyển sang tìm `dense` trực tiếp.
         """
-        if mode not in ("dense", "sparse", "hybrid"):
-            raise ValueError(f"Chế độ tìm kiếm không hợp lệ: {mode!r}")
-
         if mode == "sparse":
             sparse = query_vector(query)
             if not sparse.indices:
                 return []
-            try:
-                response = self.client.query_points(
-                    collection_name=self.collection,
-                    query=models.SparseVector(indices=sparse.indices, values=sparse.values),
-                    using=SPARSE_VECTOR_NAME,
-                    limit=limit,
-                    with_payload=True,
-                )
-            except Exception as exc:
-                raise SearchUnavailableError(f"Lỗi truy vấn Qdrant collection '{self.collection}'") from exc
-            return [_to_hit(p) for p in response.points]
+            return self._query(
+                limit,
+                query=models.SparseVector(indices=sparse.indices, values=sparse.values),
+                using=SPARSE_VECTOR_NAME,
+            )
 
         dense_vec = self.embedder.embed_dense([query])[0]
+        sparse = query_vector(query) if mode == "hybrid" else None
+        if sparse is None or not sparse.indices:
+            return self._query(limit, query=dense_vec, using=DENSE_VECTOR_NAME)
 
-        if mode == "dense":
-            return self._query_dense(dense_vec, limit)
+        return self._query(
+            limit,
+            prefetch=[
+                models.Prefetch(query=dense_vec, using=DENSE_VECTOR_NAME, limit=self.candidate_k),
+                models.Prefetch(
+                    query=models.SparseVector(indices=sparse.indices, values=sparse.values),
+                    using=SPARSE_VECTOR_NAME,
+                    limit=self.candidate_k,
+                ),
+            ],
+            query=models.FusionQuery(fusion=models.Fusion.RRF),
+        )
 
-        sparse = query_vector(query)
-        if not sparse.indices:
-            return self._query_dense(dense_vec, limit)
-
+    def _query(self, limit: int, **query_args: Any) -> list[Hit]:
         try:
             response = self.client.query_points(
-                collection_name=self.collection,
-                prefetch=[
-                    models.Prefetch(
-                        query=dense_vec,
-                        using=DENSE_VECTOR_NAME,
-                        limit=self.candidate_k,
-                    ),
-                    models.Prefetch(
-                        query=models.SparseVector(indices=sparse.indices, values=sparse.values),
-                        using=SPARSE_VECTOR_NAME,
-                        limit=self.candidate_k,
-                    ),
-                ],
-                query=models.FusionQuery(fusion=models.Fusion.RRF),
-                limit=limit,
-                with_payload=True,
-            )
-        except Exception as exc:
-            raise SearchUnavailableError(f"Lỗi truy vấn Qdrant collection '{self.collection}'") from exc
-        return [_to_hit(p) for p in response.points]
-
-    def _query_dense(self, dense_vec: list[float], limit: int) -> list[Hit]:
-        try:
-            response = self.client.query_points(
-                collection_name=self.collection,
-                query=dense_vec,
-                using=DENSE_VECTOR_NAME,
-                limit=limit,
-                with_payload=True,
+                collection_name=self.collection, limit=limit, with_payload=True, **query_args
             )
         except Exception as exc:
             raise SearchUnavailableError(f"Lỗi truy vấn Qdrant collection '{self.collection}'") from exc

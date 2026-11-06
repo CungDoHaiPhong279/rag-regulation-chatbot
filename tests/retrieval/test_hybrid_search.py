@@ -189,9 +189,11 @@ def test_unaccented_query_does_not_crash(
     assert len(hits) > 0
 
 
+@pytest.mark.parametrize("mode", ["dense", "sparse", "hybrid"])
 def test_qdrant_error_wrapped(
     indexed_searcher: tuple[HybridSearcher, QdrantClient, dict[str, Chunk]],
     monkeypatch: pytest.MonkeyPatch,
+    mode: str,
 ) -> None:
     searcher, client, _ = indexed_searcher
 
@@ -200,7 +202,7 @@ def test_qdrant_error_wrapped(
 
     monkeypatch.setattr(client, "query_points", boom)
     with pytest.raises(SearchUnavailableError) as exc_info:
-        searcher.search("tín chỉ", mode="hybrid")
+        searcher.search("tín chỉ", mode=mode)
     assert isinstance(exc_info.value.__cause__, ConnectionError)
 
 
