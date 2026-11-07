@@ -33,6 +33,23 @@ class FailingEmbedder:
         raise RuntimeError("embed failed")
 
 
+class FakeLLM:
+    """Trả lần lượt các phần tử trong responses; phần tử là Exception thì raise; ghi lại prompt và system."""
+
+    def __init__(self, responses: list) -> None:
+        self.responses = list(responses)
+        self.prompts: list[str] = []
+        self.systems: list[str | None] = []
+
+    def generate(self, prompt: str, system: str | None = None) -> str:
+        self.prompts.append(prompt)
+        self.systems.append(system)
+        response = self.responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+
 class FakeReranker:
     """Điểm = tỉ lệ từ của câu hỏi có trong text; giữ thứ tự cũ khi hòa."""
 
