@@ -2,7 +2,7 @@ import unicodedata
 
 import pytest
 
-from src.rag.citations import extract_citation_ids, is_refusal, normalize_refusal
+from src.rag.citations import extract_citation_ids, is_refusal, normalize_refusal, renumber_citations
 from src.rag.constants import REFUSAL
 
 
@@ -55,3 +55,8 @@ def test_empty_answer_is_not_refusal():
 )
 def test_extract_citation_ids(answer, expected):
     assert extract_citation_ids(answer) == expected
+
+
+def test_renumber_citations_follows_first_appearance():
+    answer = "A [3]. B [1][3]. C [1, 3]. Điều [a] giữ nguyên."
+    assert renumber_citations(answer) == "A [1]. B [2][1]. C [2, 1]. Điều [a] giữ nguyên."
