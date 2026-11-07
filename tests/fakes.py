@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import hashlib
 import math
 
@@ -30,3 +31,20 @@ class FailingEmbedder:
 
     def embed_dense(self, texts: list[str]) -> list[list[float]]:
         raise RuntimeError("embed failed")
+
+
+class FakeReranker:
+    """Điểm = tỉ lệ từ của câu hỏi có trong text; giữ thứ tự cũ khi hòa."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, int]] = []
+
+    def rerank(self, query, hits, top_k):
+        self.calls.append((query, top_k))
+        query_tokens = set(query.lower().split())
+
+        def score(hit) -> float:
+            return len(query_tokens & set(hit.text.lower().split())) / (len(query_tokens) or 1)
+
+        scored = [replace(hit, score=score(hit)) for hit in hits]
+        return sorted(scored, key=lambda h: h.score, reverse=True)[:top_k]
