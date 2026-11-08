@@ -53,3 +53,14 @@ Kiểm tra file và chạy đánh giá:
 ```
 
 Báo cáo JSON ghi vào `eval/reports/` kèm model, collection, `chunk_size`, commit và ngày chạy.
+
+## Hội thoại đánh giá bước viết lại (`dialogues.jsonl`)
+
+10 hội thoại về Thông tư 08/2021 (d01–d11, đã bỏ d08 vì nhãn phải suy luận). Mỗi dòng: `history` (2 hoặc 4 lượt
+user/assistant), `question` (câu nối tiếp, phụ thuộc ngữ cảnh), `standalone` (câu độc lập viết tay), `gold` (như trên),
+`answer_hint` (chỉ để duyệt). **Nguồn gốc:** d01 do Claude soạn từ câu q32; d02–d11 do worker AI (Gemini) soạn nháp,
+Claude kiểm tra tự động (định dạng, Điều/trang có thật), người dùng duyệt ngày 2026-11-08. Chưa đối chiếu với PDF gốc.
+
+```powershell
+.venv\Scripts\python -m eval.evaluate_rewrite
+```
