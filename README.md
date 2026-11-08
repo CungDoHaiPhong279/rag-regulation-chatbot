@@ -9,28 +9,44 @@ có rerank hay không) đều được chọn bằng số liệu trên tập dev
 
 ## Kiến trúc
 
+Hệ thống có hai luồng: **index** (chạy một lần khi thêm PDF) và **trả lời** (chạy mỗi câu hỏi).
+
+**1. Index: PDF → Qdrant**
+
 ```mermaid
 flowchart LR
-    subgraph Index
-        PDF[PDF quy chế] --> CH[Chunker<br/>1 chunk = 1 trang, tối đa 1 Điều]
-        CH --> D[BGE-M3<br/>vector dense 1024]
-        CH --> S[BM25 tự cài<br/>pyvi, k1=1.2, b=0.75]
-        D --> Q[(Qdrant<br/>named vectors)]
-        S --> Q
-    end
-    subgraph "Trả lời"
-        U[Câu hỏi + lịch sử] --> RW[Viết lại câu hỏi nối tiếp<br/>Gemini]
-        RW --> H[Hybrid search<br/>dense top-20 + BM25 top-20 → RRF]
-        Q --> H
-        H --> RR[Reranker bge-reranker-v2-m3<br/>20 → 5]
-        RR --> L1{Lớp 1: điểm cao nhất<br/>< ngưỡng?}
-        L1 -- có --> REF[Từ chối]
-        L1 -- không --> LLM[Gemini: chỉ dùng context,<br/>trích dẫn số n trong ngoặc vuông]
-        LLM --> L2{Lớp 2: có trích dẫn<br/>và số hợp lệ?}
-        L2 -- không --> REF
-        L2 -- có --> A[Câu trả lời + trang/Điều<br/>lấy từ metadata]
-    end
+    PDF["PDF quy chế"] --> CH["Chunker"]
+    CH --> D["BGE-M3<br/>(dense)"]
+    CH --> S["BM25<br/>(sparse)"]
+    D --> Q[("Qdrant")]
+    S --> Q
 ```
+
+**2. Trả lời: câu hỏi → câu trả lời có trích dẫn**
+
+```mermaid
+flowchart TD
+    U["Câu hỏi + lịch sử chat"] --> RW["① Viết lại câu hỏi<br/>(Gemini)"]
+    RW --> H["② Hybrid search<br/>dense + BM25 → RRF"]
+    H --> RR["③ Rerank<br/>20 → 5"]
+    RR --> L1{"④ Điểm rerank<br/>≥ ngưỡng?"}
+    L1 -- "không" --> R1["Từ chối"]
+    L1 -- "có" --> LLM["⑤ Gemini trả lời<br/>chỉ từ 5 đoạn, trích [n]"]
+    LLM --> L2{"⑥ Trích dẫn<br/>hợp lệ?"}
+    L2 -- "không" --> R2["Từ chối"]
+    L2 -- "có" --> A["Câu trả lời<br/>+ file / trang / Điều"]
+```
+
+| Bước | Làm gì |
+|---|---|
+| Chunker | Cắt PDF thành đoạn ~1200 ký tự; mỗi đoạn nằm trong đúng 1 trang và tối đa 1 Điều, giữ số trang làm metadata. |
+| BGE-M3 / BM25 | Mỗi đoạn có 2 vector: dense 1024 chiều (hiểu nghĩa) và BM25 tự cài với `pyvi` (bắt đúng từ khóa, con số). |
+| ① Viết lại | Câu nối tiếp ("thế còn học kỳ hè?") được viết thành câu độc lập trước khi tìm. |
+| ② Hybrid | Lấy top-20 từ mỗi loại vector rồi gộp bằng RRF (Reciprocal Rank Fusion: cộng điểm theo thứ hạng). |
+| ③ Rerank | `bge-reranker-v2-m3` chấm lại 20 đoạn, giữ 5 đoạn tốt nhất. |
+| ④ Lớp chống bịa 1 | Đoạn tốt nhất vẫn quá kém (dưới ngưỡng 0,02) thì từ chối luôn, không gọi LLM. |
+| ⑤ Gemini | Chỉ được dùng 5 đoạn đã cho và phải ghi số `[n]` của đoạn mình dựa vào. |
+| ⑥ Lớp chống bịa 2 | Không có `[n]` hoặc `[n]` không tồn tại thì từ chối. Trang/Điều lấy từ metadata của đoạn `[n]`, không từ LLM. |
 
 Thành phần: `src/ingestion` (chunker, BM25, embedder, indexer), `src/retrieval` (hybrid search, reranker),
 `src/rag` (prompt, LLM, viết lại câu hỏi, pipeline), `src/api` (FastAPI `/chat`, `/health`), `src/ui` (Streamlit),
