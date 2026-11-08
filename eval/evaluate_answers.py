@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import sys
+import time
 from typing import Sequence
 
 from eval.dataset import Question, load_questions
@@ -22,10 +23,15 @@ def _rate(hits: int, total: int) -> float | None:
     return round(hits / total, 4) if total else None
 
 
-def evaluate_answers(questions: list[Question], pipeline: RagPipeline) -> dict[str, float | None]:
-    """Câu bị lỗi LLM không biết kết quả nên bị loại khỏi mọi mẫu số và chỉ đếm vào llm_errors."""
+def evaluate_answers(questions: list[Question], pipeline: RagPipeline, delay_s: float = 0.0) -> dict[str, float | None]:
+    """Câu bị lỗi LLM không biết kết quả nên bị loại khỏi mọi mẫu số và chỉ đếm vào llm_errors.
+
+    delay_s: nghỉ giữa các câu để không vượt giới hạn số lần gọi/phút của Gemini (lỗi 429).
+    """
     refused_out = n_out = refused_in = n_in = cited_ok = n_answered = llm_errors = 0
-    for q in questions:
+    for i, q in enumerate(questions):
+        if i and delay_s:
+            time.sleep(delay_s)
         try:
             answer = pipeline.answer(q.question)
         except LLMUnavailableError:
@@ -76,6 +82,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--split", choices=("dev", "test"), default="test")
     parser.add_argument("--questions", type=Path, default=Path("eval/data/questions.jsonl"))
     parser.add_argument("--sweep", default=None, help="Danh sách ngưỡng, vd. 0.1,0.2,0.3 (chỉ split dev)")
+    parser.add_argument("--delay", type=float, default=0.0, help="Số giây nghỉ giữa các câu (tránh lỗi 429)")
     parser.add_argument("--out", type=Path, default=Path("eval/reports"))
     args = parser.parse_args(argv)
 
@@ -109,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
                   f"từ chối nhầm={row['false_refusal_rate']}")
     else:
         meta |= {"llm_model": settings.gemini_model, "rerank_threshold": settings.rerank_threshold}
-        results = evaluate_answers(questions, pipeline)
+        results = evaluate_answers(questions, pipeline, args.delay)
         path = write_report(results, meta, args.out, kind="answers")
         print("  " + "  ".join(f"{name}={value}" for name, value in results.items()))
     print(f"Split {args.split}, {len(questions)} câu. Báo cáo: {path}")

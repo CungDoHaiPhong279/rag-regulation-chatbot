@@ -26,7 +26,7 @@ nên luôn giải thích **vì sao**, không chỉ **cái gì**.
 - Payload mỗi chunk/point: `source_file`, `page_number` (int, 1-based), `article` (str | None), `chunk_index`, `text`.
   Không bước nào được làm mất hay tính lại `page_number`; số trang trong câu trả lời lấy từ metadata, không từ LLM.
 - Chunker (bất biến có test): mỗi chunk thuộc đúng 1 trang và tối đa 1 Điều; tiền tố `"Điều X. Tên: "`, tính vào
-  `chunk_size`; `chunk_size`/`chunk_overlap` đơn vị **ký tự** (mặc định 800/150, chốt bằng Recall@5);
+  `chunk_size`; `chunk_size`/`chunk_overlap` đơn vị **ký tự** (mặc định 1200/200, chốt bằng Recall@5 trên dev);
   ID = `uuid5(NAMESPACE_URL, f"{source_file}:{page_number}:{chunk_index}")`; Unicode NFC; PDF scan/hỏng bị bỏ qua và báo rõ.
 - Qdrant: named vectors `dense` (1024, Cosine, BGE-M3) + `sparse` (BM25, `Modifier.IDF`). BM25: `k1=1.2`, `b=0.75`,
   tách từ `pyvi`, token ID = 32 bit đầu `blake2b`. Docker `qdrant/qdrant:v1.12.5` là môi trường chính; local mode chỉ

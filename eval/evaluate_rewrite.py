@@ -12,6 +12,7 @@ from pathlib import Path
 import sys
 
 from eval.dataset import Gold, parse_gold
+from eval.evaluate_retrieval import build_metadata, write_report
 from eval.metrics import recall_at_k
 from src.rag.llm import LLMClient
 from src.rag.models import Turn
@@ -95,6 +96,7 @@ def evaluate_rewrite(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Đánh giá bước viết lại câu hỏi nối tiếp")
     parser.add_argument("--dialogues", type=Path, default=Path("eval/data/dialogues.jsonl"))
+    parser.add_argument("--out", type=Path, default=Path("eval/reports"))
     args = parser.parse_args(argv)
     try:
         cases = load_dialogues(args.dialogues)
@@ -113,7 +115,11 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         print(exc, file=sys.stderr)
         return 1
+    settings = pipeline.settings
+    meta = build_metadata(settings, settings.collection, "dialogues", rerank=True) | {"llm_model": settings.gemini_model}
+    path = write_report(result, meta, args.out, kind="rewrite")
     print("  " + "  ".join(f"{name}={value}" for name, value in result.items()))
+    print(f"Báo cáo: {path}")
     return 0
 
 

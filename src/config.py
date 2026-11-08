@@ -25,13 +25,13 @@ class Settings:
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
     gemini_api_key: str | None = field(default=None, repr=False)
     gemini_model: str | None = None
-    chunk_size: int = 800
-    chunk_overlap: int = 150
+    chunk_size: int = 1200  # chọn bằng Recall@5 trên dev (400/800/1200), xem eval/reports
+    chunk_overlap: int = 200
     bm25_k1: float = 1.2
     bm25_b: float = 0.75
     candidate_k: int = 20
     final_k: int = 5
-    rerank_threshold: float = 0.3  # giá trị khởi đầu, chỉnh trên tập dev (Task 15)
+    rerank_threshold: float = 0.02  # ngưỡng lớn nhất có từ chối nhầm ≤ 10% trên dev
     llm_timeout_s: float = 30.0
     debug: bool = False
 
