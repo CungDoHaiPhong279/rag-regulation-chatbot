@@ -9,7 +9,7 @@ from qdrant_client import QdrantClient, models
 from src.ingestion.chunker import Chunk
 from src.ingestion.indexer import DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME, ensure_collection, index_corpus
 from src.retrieval.hybrid_search import Hit, HybridSearcher, SearchUnavailableError
-from tests.fakes import FakeEmbedder
+from tests.fakes import FailingEmbedder, FakeEmbedder
 
 COLLECTION = "t"
 
@@ -204,6 +204,18 @@ def test_qdrant_error_wrapped(
     with pytest.raises(SearchUnavailableError) as exc_info:
         searcher.search("tín chỉ", mode=mode)
     assert isinstance(exc_info.value.__cause__, ConnectionError)
+
+
+@pytest.mark.parametrize("mode", ["dense", "hybrid"])
+def test_embedder_error_wrapped(
+    indexed_searcher: tuple[HybridSearcher, QdrantClient, dict[str, Chunk]],
+    mode: str,
+) -> None:
+    searcher, _, _ = indexed_searcher
+    searcher.embedder = FailingEmbedder()
+    with pytest.raises(SearchUnavailableError) as exc_info:
+        searcher.search("tín chỉ", mode=mode)
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
 
 
 def test_is_ready_false_on_empty_collection() -> None:

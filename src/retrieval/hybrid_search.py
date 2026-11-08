@@ -72,7 +72,10 @@ class HybridSearcher:
                 using=SPARSE_VECTOR_NAME,
             )
 
-        dense_vec = self.embedder.embed_dense([query])[0]
+        try:
+            dense_vec = self.embedder.embed_dense([query])[0]
+        except Exception as exc:
+            raise SearchUnavailableError("Lỗi tạo embedding cho câu hỏi") from exc
         sparse = query_vector(query) if mode == "hybrid" else None
         if sparse is None or not sparse.indices:
             return self._query(limit, query=dense_vec, using=DENSE_VECTOR_NAME)
