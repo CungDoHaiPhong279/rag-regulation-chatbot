@@ -54,17 +54,15 @@ class ChatRequest(BaseModel):
 
 def default_pipeline_factory() -> RagPipeline:
     # Import ở đây để test (truyền factory giả) không phải nạp torch và model.
-    import torch
-
     from src.config import load_settings
-    from src.ingestion.embedder import BgeM3Embedder
+    from src.ingestion.embedder import BgeM3Embedder, default_device
     from src.ingestion.indexer import get_client
     from src.rag.llm import GeminiClient
     from src.retrieval.hybrid_search import HybridSearcher
     from src.retrieval.reranker import BgeReranker
 
     settings = load_settings()
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = default_device()
     logger.info("Thiết bị chạy model: %s", device)
     searcher = HybridSearcher(
         get_client(settings),

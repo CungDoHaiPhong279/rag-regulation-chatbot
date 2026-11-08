@@ -1,0 +1,3 @@
+{"id": "sample-01", "question": "Sinh viên bị cảnh báo học tập khi nào?", "in_scope": true, "split": "dev", "gold": [{"source_file": "thong_tu_08_2021.pdf", "article": "Điều 11", "pages": [13]}]}
+{"id": "sample-02", "question": "Sinh viên bị buộc thôi học trong những trường hợp nào?", "in_scope": true, "split": "dev", "gold": [{"source_file": "thong_tu_08_2021.pdf", "article": "Điều 11", "pages": [13, 14]}]}
+{"id": "sample-03", "question": "Học phí ngành Công nghệ thông tin năm nay là bao nhiêu?", "in_scope": false, "split": "dev", "gold": []}

@@ -18,6 +18,12 @@ class Embedder(Protocol):
         ...
 
 
+def default_device() -> str:
+    import torch
+
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
 class BgeM3Embedder:
     dense_dim = 1024
 
