@@ -26,16 +26,11 @@ class Question:
     gold: tuple[Gold, ...]
 
 
-def _parse(row: dict) -> Question:
-    question = row["question"]
-    if not isinstance(question, str) or not question.strip():
-        raise ValueError("question rỗng")
-    if row["split"] not in SPLITS:
-        raise ValueError(f"split phải là dev hoặc test, nhận {row['split']!r}")
+def parse_gold(rows: list[dict]) -> tuple[Gold, ...]:
     from eval.metrics import article_number  # import trong hàm: metrics cũng import Gold từ module này
 
     gold = []
-    for g in row["gold"]:
+    for g in rows:
         pages = tuple(int(p) for p in g["pages"])
         if not pages:
             raise ValueError("gold.pages rỗng")
@@ -43,12 +38,22 @@ def _parse(row: dict) -> Question:
             # Nhãn kiểu "Khoản 2, Điều 11" không bao giờ khớp chunk nào: Recall sẽ âm thầm bằng 0.
             raise ValueError(f"gold.article phải bắt đầu bằng 'Điều <số>', nhận {g['article']!r}")
         gold.append(Gold(g["source_file"], g["article"], pages))
+    return tuple(gold)
+
+
+def _parse(row: dict) -> Question:
+    question = row["question"]
+    if not isinstance(question, str) or not question.strip():
+        raise ValueError("question rỗng")
+    if row["split"] not in SPLITS:
+        raise ValueError(f"split phải là dev hoặc test, nhận {row['split']!r}")
+    gold = parse_gold(row["gold"])
     in_scope = bool(row["in_scope"])
     if in_scope and not gold:
         raise ValueError("câu in_scope=true phải có gold")
     if not in_scope and gold:
         raise ValueError("câu in_scope=false không được có gold")
-    return Question(str(row["id"]), question.strip(), in_scope, row["split"], tuple(gold))
+    return Question(str(row["id"]), question.strip(), in_scope, row["split"], gold)
 
 
 def load_questions(path: Path, split: str | None = None) -> list[Question]:

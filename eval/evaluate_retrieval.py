@@ -82,10 +82,10 @@ def build_metadata(settings: Settings, collection: str, split: str, rerank: bool
     }
 
 
-def write_report(results: dict, meta: dict, out_dir: Path) -> Path:
+def write_report(results: dict, meta: dict, out_dir: Path, kind: str = "retrieval") -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    path = out_dir / f"retrieval_{meta['split']}_{meta['collection']}_{stamp}.json"
+    path = out_dir / f"{kind}_{meta['split']}_{meta['collection']}_{stamp}.json"
     path.write_text(json.dumps({"meta": meta, "results": results}, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
 
