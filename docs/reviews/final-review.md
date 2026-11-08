@@ -41,7 +41,7 @@ Ghi chú: lần chạy đầu của tôi bị lỗi vì bản sao thiếu `eval/
 
 **Phát hiện (xếp theo mức nghiêm trọng):**
 1. TRUNG BÌNH, đã xác nhận: README mục "Viết lại câu hỏi nối tiếp" (khoảng dòng 102: 0,900 / 0,967 / mất 0,067 / 15 hội thoại) không có file báo cáo nào trong `eval/reports/` để đối chiếu. Thư mục chỉ có báo cáo retrieval, threshold và answers, không có `rewrite_*.json`. Hướng khắc phục: chạy lại và lưu báo cáo, hoặc ghi rõ số liệu lấy từ đâu. Tôi không chạy `evaluate_rewrite` vì gọi Gemini.
-2. THẤP, đã xác nhận: báo cáo answers ghi `git_commit: e767347` trong khi cây làm việc chưa commit (`chunker.py`, `config.py`, `evaluate_answers.py`, `.env.example` đang sửa dở). Kết quả eval không truy ngược chính xác về một commit. Nên commit trước rồi chạy lại hoặc ghi chú. Chưa xác nhận được phần sửa chưa commit có ảnh hưởng số liệu hay không.
+2. THẤP, đã xác nhận: báo cáo answers ghi `git_commit: acdd371` trong khi cây làm việc chưa commit (`chunker.py`, `config.py`, `evaluate_answers.py`, `.env.example` đang sửa dở). Kết quả eval không truy ngược chính xác về một commit. Nên commit trước rồi chạy lại hoặc ghi chú. Chưa xác nhận được phần sửa chưa commit có ảnh hưởng số liệu hay không.
 3. THẤP, chưa kiểm chứng đầy đủ: stderr của `evaluate_answers` hiện chữ Việt dạng `ỉ...` khi chạy qua pipe trên Windows, kèm một ký tự `�`. Có thể do console encoding của môi trường chạy của tôi, không chắc lỗi của code. Nếu người dùng thấy tương tự ở terminal thật thì nên đặt `PYTHONIOENCODING=utf-8` hoặc `sys.stderr.reconfigure`.
 4. THẤP, đã xác nhận: `sweep_threshold` tính từ chối bằng `top < t`, trùng với pipeline. Còn `top=None` (không có ứng viên) tính là từ chối, cũng khớp pipeline. Không có lỗi, chỉ ghi lại là đã kiểm.
 
@@ -57,8 +57,8 @@ Ghi chú: lần chạy đầu của tôi bị lỗi vì bản sao thiếu `eval/
 ---
 
 ## Xử lý (Claude)
-1. `evaluate_rewrite` giờ ghi `eval/reports/rewrite_*.json`; chạy lại sau commit `fea5fad`: Recall@5 viết lại 0,967 =
+1. `evaluate_rewrite` giờ ghi `eval/reports/rewrite_*.json`; chạy lại sau commit `75a9ac5`: Recall@5 viết lại 0,967 =
    độc lập 0,967 (lần chạy đầu, chưa lưu file, là 0,900). README ghi cả hai lần chạy.
-2. Code đã commit (`fea5fad`) trước khi chạy lại phần rewrite. Ba báo cáo còn lại giữ nguyên, README ghi chú rằng thay
+2. Code đã commit (`75a9ac5`) trước khi chạy lại phần rewrite. Ba báo cáo còn lại giữ nguyên, README ghi chú rằng thay
    đổi chưa commit lúc đó (giá trị mặc định, `--delay`) không ảnh hưởng số liệu vì cấu hình truyền qua biến môi trường.
 3. Không sửa: các lần chạy thật của Claude đều đặt `PYTHONIOENCODING=utf-8`; ghi là rủi ro còn lại.

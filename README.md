@@ -57,7 +57,7 @@ ngoài phạm vi) và 15 hội thoại nhiều lượt. **Câu hỏi và nhãn d
 người làm dự án duyệt; nhãn chưa đối chiếu từng câu với PDF gốc.** Một chunk được tính là "trúng" khi cùng file, cùng
 số Điều và trang nằm trong nhãn.
 
-Cấu hình: `BAAI/bge-m3`, `BAAI/bge-reranker-v2-m3` (float16, CUDA), `gemini-3.5-flash-lite`; commit `e767347`;
+Cấu hình: `BAAI/bge-m3`, `BAAI/bge-reranker-v2-m3` (float16, CUDA), `gemini-3.5-flash-lite`; commit `acdd371`;
 ngày 2026-11-08. File JSON gốc trong `eval/reports/`.
 
 ### Chọn `chunk_size` (split dev, 26 câu trong phạm vi)
@@ -101,9 +101,9 @@ Câu trả lời (pipeline đầy đủ, ngưỡng 0,02):
 
 Viết lại câu hỏi nối tiếp (15 hội thoại): Recall@5 với câu độc lập viết tay **0,967**. Với câu do LLM viết lại,
 hai lần chạy cho **0,900** và **0,967** (LLM không tất định), tức bước viết lại làm mất 0–1 hội thoại trên 15; không
-lần nào lỗi. File JSON chỉ có lần chạy thứ hai (commit `fea5fad`); lần đầu chưa lưu báo cáo.
+lần nào lỗi. File JSON chỉ có lần chạy thứ hai (commit `75a9ac5`); lần đầu chưa lưu báo cáo.
 
-Báo cáo truy xuất, ngưỡng và câu trả lời ghi commit `e767347` nhưng chạy trên cây có thay đổi chưa commit; các thay đổi
+Báo cáo truy xuất, ngưỡng và câu trả lời ghi commit `acdd371` nhưng chạy trên cây có thay đổi chưa commit; các thay đổi
 đó (giá trị mặc định, tham số `--delay`) không ảnh hưởng số liệu vì cấu hình được truyền qua biến môi trường.
 
 ## Cài đặt

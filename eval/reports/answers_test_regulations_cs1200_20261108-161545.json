@@ -1,7 +1,7 @@
 {
   "meta": {
     "date": "2026-11-08T16:05:51",
-    "git_commit": "e767347",
+    "git_commit": "acdd371",
     "split": "test",
     "collection": "regulations_cs1200",
     "embedding_model": "BAAI/bge-m3",
