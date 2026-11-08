@@ -16,7 +16,8 @@ from dotenv import load_dotenv
 
 @dataclass(frozen=True)
 class Settings:
-    qdrant_url: str = "http://localhost:6333"
+    # 127.0.0.1 chứ không phải localhost: Windows thử IPv6 (::1) trước, Docker chỉ mở cổng IPv4 -> mỗi lệnh chậm 2 s.
+    qdrant_url: str = "http://127.0.0.1:6333"
     qdrant_api_key: str | None = field(default=None, repr=False)
     qdrant_path: str | None = None
     collection: str = "regulations"
