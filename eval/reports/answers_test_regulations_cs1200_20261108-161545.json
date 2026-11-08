@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "date": "2026-11-08T16:05:51",
+    "git_commit": "e767347",
+    "split": "test",
+    "collection": "regulations_cs1200",
+    "embedding_model": "BAAI/bge-m3",
+    "reranker_model": "BAAI/bge-reranker-v2-m3",
+    "chunk_size": 1200,
+    "chunk_overlap": 200,
+    "candidate_k": 20,
+    "final_k": 5,
+    "llm_model": "gemini-3.5-flash-lite",
+    "rerank_threshold": 0.02
+  },
+  "results": {
+    "correct_refusal_rate": 1.0,
+    "false_refusal_rate": 0.0833,
+    "citation_valid_rate": 0.9091,
+    "llm_errors": 0,
+    "n_out_of_scope": 10,
+    "n_in_scope": 60
+  }
+}

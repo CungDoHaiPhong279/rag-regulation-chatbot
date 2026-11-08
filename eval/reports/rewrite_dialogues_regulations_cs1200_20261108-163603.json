@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "date": "2026-11-08T16:36:03",
+    "git_commit": "fea5fad",
+    "split": "dialogues",
+    "collection": "regulations_cs1200",
+    "embedding_model": "BAAI/bge-m3",
+    "reranker_model": "BAAI/bge-reranker-v2-m3",
+    "chunk_size": 1200,
+    "chunk_overlap": 200,
+    "candidate_k": 20,
+    "final_k": 5,
+    "llm_model": "gemini-3.5-flash-lite"
+  },
+  "results": {
+    "recall@5_rewritten": 0.9667,
+    "recall@5_standalone": 0.9667,
+    "gap": 0.0,
+    "rewrite_failures": 0,
+    "n": 15
+  }
+}

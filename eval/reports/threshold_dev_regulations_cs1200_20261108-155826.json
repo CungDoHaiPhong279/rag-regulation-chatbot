@@ -1,0 +1,61 @@
+{
+  "meta": {
+    "date": "2026-11-08T15:58:13",
+    "git_commit": "e767347",
+    "split": "dev",
+    "collection": "regulations_cs1200",
+    "embedding_model": "BAAI/bge-m3",
+    "reranker_model": "BAAI/bge-reranker-v2-m3",
+    "chunk_size": 1200,
+    "chunk_overlap": 200,
+    "candidate_k": 20,
+    "final_k": 5
+  },
+  "results": [
+    {
+      "threshold": 0.01,
+      "correct_refusal_rate": 0.5,
+      "false_refusal_rate": 0.0385
+    },
+    {
+      "threshold": 0.02,
+      "correct_refusal_rate": 0.75,
+      "false_refusal_rate": 0.0769
+    },
+    {
+      "threshold": 0.05,
+      "correct_refusal_rate": 0.75,
+      "false_refusal_rate": 0.1538
+    },
+    {
+      "threshold": 0.1,
+      "correct_refusal_rate": 1.0,
+      "false_refusal_rate": 0.1538
+    },
+    {
+      "threshold": 0.2,
+      "correct_refusal_rate": 1.0,
+      "false_refusal_rate": 0.1538
+    },
+    {
+      "threshold": 0.3,
+      "correct_refusal_rate": 1.0,
+      "false_refusal_rate": 0.1538
+    },
+    {
+      "threshold": 0.4,
+      "correct_refusal_rate": 1.0,
+      "false_refusal_rate": 0.1923
+    },
+    {
+      "threshold": 0.5,
+      "correct_refusal_rate": 1.0,
+      "false_refusal_rate": 0.1923
+    },
+    {
+      "threshold": 0.6,
+      "correct_refusal_rate": 1.0,
+      "false_refusal_rate": 0.2308
+    }
+  ]
+}

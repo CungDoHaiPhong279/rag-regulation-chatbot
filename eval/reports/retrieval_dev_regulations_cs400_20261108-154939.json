@@ -1,0 +1,33 @@
+{
+  "meta": {
+    "date": "2026-11-08T15:49:39",
+    "git_commit": "e767347",
+    "split": "dev",
+    "collection": "regulations_cs400",
+    "embedding_model": "BAAI/bge-m3",
+    "reranker_model": "BAAI/bge-reranker-v2-m3",
+    "chunk_size": 400,
+    "chunk_overlap": 80,
+    "candidate_k": 20,
+    "final_k": 5
+  },
+  "results": {
+    "dense": {
+      "recall@5": 0.8077,
+      "recall@20": 0.9231,
+      "mrr@5": 0.734,
+      "n": 26
+    },
+    "hybrid": {
+      "recall@5": 0.8462,
+      "recall@20": 0.9231,
+      "mrr@5": 0.7532,
+      "n": 26
+    },
+    "hybrid_rerank": {
+      "recall@5": 0.8846,
+      "mrr@5": 0.7865,
+      "n": 26
+    }
+  }
+}
