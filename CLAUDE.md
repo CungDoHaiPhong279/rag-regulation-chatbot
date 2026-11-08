@@ -15,7 +15,7 @@ nên luôn giải thích **vì sao**, không chỉ **cái gì**.
   Giải thích thuật ngữ ở lần đầu xuất hiện. Không bao giờ bịa kết quả kiểm chứng.
 - TDD: test đỏ trước, rồi mới code. Task chưa có test hoặc chưa chạy được thì chưa xong.
 - Không thêm thư viện ngoài plan; không đổi cấu trúc thư mục ngoài plan khi chưa hỏi.
-- Git: commit sau mỗi task đã verify (kèm dòng `Co-Authored-By`); **không push** khi chưa được đồng ý; không viết lại
+- Git: commit sau mỗi task đã verify (**không** thêm dòng `Co-Authored-By` Claude); **không push** khi chưa được đồng ý; không viết lại
   lịch sử; không làm trực tiếp trên `main`. Điểm khôi phục: tag `checkpoint/pre-redesign`.
 - Phải hỏi trước khi: xóa dữ liệu/tài liệu của người dùng, xóa collection hoặc volume Qdrant, push, cài đặt làm đổi PyTorch.
 
