@@ -1,13 +1,18 @@
 # Bộ câu hỏi đánh giá
 
-`questions.jsonl`: mỗi dòng một câu hỏi (JSON). Hiện chỉ có 3 câu mẫu (`sample-*`, split `dev`) để kiểm tra
-công cụ; **70 câu thật do người dùng tự viết và gán nhãn**.
+`questions.jsonl`: mỗi dòng một câu hỏi (JSON), 70 câu (50 `test`, 20 `dev`) về Thông tư 08/2021.
+
+**Nguồn gốc (ghi rõ trong mọi báo cáo):** câu hỏi và nhãn do AI (Gemini) soạn nháp từ văn bản đã index, một worker
+AI thứ hai soát lại (sửa 20 câu), Claude kiểm tra tự động (nhãn có thật, không chép ≥5 chữ liên tiếp của văn bản,
+mỗi Điều tối đa 3 câu, phủ 22/22 Điều), người dùng duyệt ngày 2026-11-08. Nhãn chưa được đối chiếu từng câu với PDF
+gốc. Trường `answer_hint` (tóm tắt đáp án) chỉ để duyệt, bộ đọc dữ liệu bỏ qua.
 
 ## Định dạng
 
 ```json
 {"id": "q07", "question": "...", "in_scope": true, "split": "test",
- "gold": [{"source_file": "thong_tu_08_2021.pdf", "article": "Điều 11", "pages": [13, 14]}]}
+ "gold": [{"source_file": "thong_tu_08_2021.pdf", "article": "Điều 11", "pages": [13, 14]}],
+ "answer_hint": "Tóm tắt đáp án (tùy chọn, chỉ để duyệt)"}
 ```
 
 | Trường | Ý nghĩa |
