@@ -1,3 +1,5 @@
+# torch ban CUDA (+cu132) chi co tren index cua PyTorch; may khong co GPU van chay duoc tren CPU.
+--extra-index-url https://download.pytorch.org/whl/cu132
 altair==6.3.0
 annotated-doc==0.0.5
 annotated-types==0.8.0
@@ -87,7 +89,7 @@ tabulate==0.10.0
 tenacity==9.1.4
 threadpoolctl==3.7.0
 tokenizers==0.22.2
-torch==2.15.0
+torch==2.15.0+cu132
 tqdm==4.70.1
 transformers==4.57.6
 truststore==0.10.5

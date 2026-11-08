@@ -54,6 +54,8 @@ class ChatRequest(BaseModel):
 
 def default_pipeline_factory() -> RagPipeline:
     # Import ở đây để test (truyền factory giả) không phải nạp torch và model.
+    import torch
+
     from src.config import load_settings
     from src.ingestion.embedder import BgeM3Embedder
     from src.ingestion.indexer import get_client
@@ -62,10 +64,15 @@ def default_pipeline_factory() -> RagPipeline:
     from src.retrieval.reranker import BgeReranker
 
     settings = load_settings()
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    logger.info("Thiết bị chạy model: %s", device)
     searcher = HybridSearcher(
-        get_client(settings), settings.collection, BgeM3Embedder(settings.embedding_model), settings.candidate_k
+        get_client(settings),
+        settings.collection,
+        BgeM3Embedder(settings.embedding_model, device=device),
+        settings.candidate_k,
     )
-    reranker = BgeReranker(settings.reranker_model)
+    reranker = BgeReranker(settings.reranker_model, device=device)
     reranker._load()  # tải ngay để câu hỏi đầu tiên không phải chờ tải model
     llm = (
         GeminiClient(settings.gemini_api_key, settings.gemini_model, settings.llm_timeout_s)

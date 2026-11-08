@@ -27,6 +27,8 @@ class BgeM3Embedder:
         self.model_name = model_name
         self.batch_size = batch_size
         self._model = SentenceTransformer(model_name, device=device)
+        if device.startswith("cuda"):
+            self._model.half()  # GPU 4 GB không chứa nổi BGE-M3 + reranker ở float32
 
     def embed_dense(self, texts: list[str]) -> list[list[float]]:
         if not texts:

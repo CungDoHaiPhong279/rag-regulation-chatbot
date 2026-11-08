@@ -34,6 +34,8 @@ class BgeReranker:
             from sentence_transformers import CrossEncoder
 
             self._model = CrossEncoder(self.model_name, device=self.device, max_length=self.max_length)
+            if self.device.startswith("cuda"):
+                self._model.model.half()  # float16: vừa GPU 4 GB cùng BGE-M3, nhanh hơn
         return self._model
 
     def rerank(self, query: str, hits: list[Hit], top_k: int) -> list[Hit]:

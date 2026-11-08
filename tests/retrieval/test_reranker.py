@@ -81,12 +81,24 @@ def test_constructor_does_not_load_model():
     assert BgeReranker()._model is None
 
 
+def _cuda_available() -> bool:
+    try:
+        import torch
+    except ImportError:
+        return False
+    return torch.cuda.is_available()
+
+
 @pytest.mark.slow
-def test_bge_reranker_prefers_relevant():
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_bge_reranker_prefers_relevant(device):
+    if device == "cuda" and not _cuda_available():
+        pytest.skip("Máy không có GPU CUDA")
     hits = [
         _hit(0, "Điều 14. Công nhận tốt nghiệp: Sinh viên tích lũy đủ tín chỉ được xét công nhận tốt nghiệp."),
         _hit(1, "Điều 11. Xử lý kết quả học tập: Sinh viên bị cảnh báo học tập khi điểm trung bình dưới mức quy định."),
     ]
-    out = BgeReranker().rerank("Sinh viên bị cảnh báo học tập khi nào?", hits, top_k=2)
+    out = BgeReranker(device=device).rerank("Sinh viên bị cảnh báo học tập khi nào?", hits, top_k=2)
     assert out[0].chunk_id == "id-1"
     assert all(0.0 <= h.score <= 1.0 for h in out)
+    assert all(type(h.score) is float for h in out)

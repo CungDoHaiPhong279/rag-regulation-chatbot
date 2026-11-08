@@ -63,6 +63,9 @@ câu từ chối cố định `Không tìm thấy thông tin trong tài liệu q
 - `BAAI/bge-reranker-v2-m3` qua `sentence_transformers.CrossEncoder`, rerank top-20 → top-5.
 - 14 s/truy vấn chấp nhận được cho đánh giá, chậm cho demo. **Quyết định hoãn** đến khi có số liệu Recall:
   (a) cài torch CUDA cho GPU 4 GB, hoặc (b) giảm còn top-10. Không đổi PyTorch trước quyết định đó.
+- **Cập nhật 2026-11-08 (người dùng duyệt):** chọn (a) trước khi có Recall vì demo quá chậm. `torch==2.15.0+cu132`
+  trên RTX 3050 Ti 4 GB; API tự chọn `cuda` khi có, BGE-M3 và reranker chạy float16 (float32 cả hai cần ~4,4 GB).
+  Đo thật trên TT08: rerank 14 s → 0,3–0,8 s; cả câu hỏi 15–20 s → 1–3 s; GPU dùng 2,8/4 GB. Vẫn giữ top-20.
 
 ### ADR-5. Số trang đến từ metadata, không từ LLM
 - Context đánh số `[1]…[5]`; LLM chỉ trích số; code ánh xạ số → `{source_file, page_number, article}`.
@@ -219,7 +222,7 @@ systematic-debugging, verification-before-completion, requesting-code-review + s
 
 | Mục | Xử lý |
 |---|---|
-| Reranker CPU 14 s | Quyết định CUDA hay top-10 sau khi có Recall (ADR-4) |
+| Reranker CPU 14 s | Đã chọn CUDA + float16 (ADR-4); Task 15 kiểm tra float16 không làm giảm Recall |
 | Tên model Gemini | Chọn và kiểm tra khi người dùng có API key; ghi trong `.env` và báo cáo |
 | PDF quy chế trường | Người dùng cung cấp; phải có lớp chữ |
 | Trang 1–2 TT08 là ảnh scan | Phần thân Thông tư không được index; nếu tìm được bản có lớp chữ sẽ xuất hiện hai "Điều 1" — payload phân biệt bằng `source_file`, cần kiểm tra lại khi đổi tài liệu |
