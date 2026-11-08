@@ -51,6 +51,9 @@ docker compose up -d                                           # Qdrant tại 12
 
 Chạy lệnh từ thư mục gốc repo. Cổng: API 8000, Streamlit 8502 (8501 đang bị ứng dụng khác dùng).
 
+Bật/tắt cả hệ thống (Qdrant + API + giao diện; GPU chỉ bị dùng khi API chạy, `stop` trả GPU về 0):
+`powershell -ExecutionPolicy Bypass -File chatbot.ps1 start|stop|status` (log trong `.run\`).
+
 ## 4. Quy trình Superpowers
 
 - Thực thi plan: `superpowers:executing-plans`; mọi code theo `superpowers:test-driven-development`.

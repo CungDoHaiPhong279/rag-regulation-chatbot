@@ -22,3 +22,6 @@ data/pdfs/*.pdf
 # Superpowers workspace (ledger, briefs)
 .superpowers/
 data/samples/*.pdf
+
+# Log của chatbot.ps1
+.run/
